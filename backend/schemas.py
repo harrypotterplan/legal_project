@@ -39,3 +39,22 @@ class Token(BaseModel):
 # 5. 토큰 재발급 요청 규격
 class TokenRefreshRequest(BaseModel):
     refresh_token: str
+
+
+# 법률 시뮬레이션 및 검색 기록 관련 규격
+class SimulationRequest(BaseModel):
+    category: str
+    query: str
+
+class SimulationResponse(BaseModel):
+    answer: str
+    reliability_score: float
+    reference_cases: list[str]
+
+class LogResponse(BaseModel):
+    log_id: int
+    user_query: str    # 여기 변경
+    ai_response: str   # 여기 변경
+    
+    class Config:
+        from_attributes = True
