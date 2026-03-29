@@ -5,16 +5,18 @@ import datetime
 Base = declarative_base()
 
 # 1. 회원 테이블
+
 class User(Base):
     __tablename__ = "users"
     
     user_id = Column(Integer, primary_key=True, autoincrement=True)
     email = Column(String, unique=True, nullable=False)
     password_hash = Column(String, nullable=False)
+    role = Column(String, default="USER", nullable=False) # ✨ 새로 추가된 권한 컬럼
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     refresh_token = Column(String, nullable=True)
 
-    # 관계 설정 (유저가 여러 검색 로그를 가질 수 있음)
+    # 관계 설정
     search_logs = relationship("UserSearchLog", back_populates="user")
 
 # 2. 유저 검색 기록 테이블 (DIR-01 대응)
