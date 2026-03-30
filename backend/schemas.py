@@ -1,5 +1,8 @@
-from pydantic import BaseModel, EmailStr, field_validator
 import re
+import html
+from typing import Literal
+from pydantic import BaseModel, Field, EmailStr, field_validator
+
 
 # 1. 프론트엔드가 백엔드로 보낼 때의 데이터 규격 (회원가입 요청)
 class UserCreate(BaseModel):
@@ -43,8 +46,17 @@ class TokenRefreshRequest(BaseModel):
 
 # 법률 시뮬레이션 및 검색 기록 관련 규격
 class SimulationRequest(BaseModel):
-    category: str
-    query: str
+    # 2. 카테고리 검증: 이 3개 글자 아니면 422 에러 뱉음
+    category: Literal["임대차", "근로", "소비자"] 
+    
+    # 1. 텍스트 길이 검증: 10자 미만, 1000자 초과 시 422 에러 뱉음
+    query: str = Field(..., min_length=10, max_length=1000, description="피해 상황을 10자 이상 1000자 이내로 입력해.")
+
+    # 3. XSS 방어: 악성 스크립트 태그(<script> 등)를 안전한 문자로 변환
+    @field_validator('query')
+    @classmethod
+    def sanitize_query(cls, v: str):
+        return html.escape(v)
 
 class SimulationResponse(BaseModel):
     answer: str
