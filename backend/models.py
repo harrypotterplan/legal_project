@@ -11,8 +11,9 @@ class User(Base):
     
     user_id = Column(Integer, primary_key=True, autoincrement=True)
     email = Column(String, unique=True, nullable=False)
+    username = Column(String, default="사용자", nullable=False) #사용자명 추가
     password_hash = Column(String, nullable=False)
-    role = Column(String, default="USER", nullable=False) # ✨ 새로 추가된 권한 컬럼
+    role = Column(String, default="USER", nullable=False) # 새로 추가된 권한 컬럼
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     refresh_token = Column(String, nullable=True)
 

@@ -1,12 +1,14 @@
 import re
 import html
-from typing import Literal
+from datetime import datetime
+from typing import Literal, List, Optional
 from pydantic import BaseModel, Field, EmailStr, field_validator
 
 
 # 1. 프론트엔드가 백엔드로 보낼 때의 데이터 규격 (회원가입 요청)
 class UserCreate(BaseModel):
     email: EmailStr  # 일반 str에서 EmailStr로 변경하여 이메일 형식 자동 검증
+    username: str = Field(..., min_length=2, max_length=10) # 2~10자 제한
     password: str
 
     # 비밀번호 복잡도 검사 (최소 8자, 영문/숫자/특수문자 포함)
@@ -19,9 +21,27 @@ class UserCreate(BaseModel):
         return v
 
 # 2. 백엔드가 프론트엔드에게 응답해 줄 데이터 규격
+class LogResponse(BaseModel):
+    log_id: int
+    user_query: str
+    ai_response: str
+    reliability_score: Optional[int] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class UserUpdate(BaseModel):
+    username: str = Field(..., min_length=2, max_length=10)
+    # Optional을 비밀번호 안 바꿀 거면 데이터 안보내는 것 허용
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
 class UserResponse(BaseModel):
     user_id: int
     email: str
+    username: str
+    search_logs: List[LogResponse] = []
 
     class Config:
         from_attributes = True
@@ -63,10 +83,3 @@ class SimulationResponse(BaseModel):
     reliability_score: float
     reference_cases: list[str]
 
-class LogResponse(BaseModel):
-    log_id: int
-    user_query: str    # 여기 변경
-    ai_response: str   # 여기 변경
-    
-    class Config:
-        from_attributes = True

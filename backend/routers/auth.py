@@ -30,7 +30,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
     # 2. 비밀번호 해싱 및 유저 객체 생성
     hashed_pw = get_password_hash(user.password)
-    new_user = models.User(email=user.email, password_hash=hashed_pw)
+    new_user = models.User(email=user.email, username=user.username, password_hash=hashed_pw)
     
     # 3. DB 트랜잭션 처리
     db.add(new_user)
