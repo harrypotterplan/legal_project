@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import { Mail, Lock, User } from 'lucide-react';
+import { useTranslation } from 'react-i18next'; // ✨ 다국어 훅 추가
+import { api } from '../api';
 
 // ==================== Styled Components ====================
 const LoginContainer = styled.div`
@@ -22,6 +24,27 @@ const LoginBox = styled.div`
   box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
+  position: relative; /* ✨ 버튼 위치를 잡기 위해 추가 */
+`;
+
+// ✨ 예쁜 언어 스위치 버튼 스타일 추가
+const LangButton = styled.button`
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background: transparent;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: #f4f6f8;
+    color: #2c3e50;
+  }
 `;
 
 const LogoArea = styled.div`
@@ -120,59 +143,109 @@ const ToggleText = styled.div`
 
 // ==================== Main Component ====================
 const LoginPage = ({ onLogin }) => {
+  const { t, i18n } = useTranslation(); // ✨ 다국어 객체 꺼내기
   const [isLoginMode, setIsLoginMode] = useState(true); 
+  
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
 
-  // ✨ 제출 버튼을 눌렀을 때의 동작을 분리했습니다!
-  const handleSubmit = (e) => {
+  // ✨ 언어 변경 함수
+  const toggleLanguage = () => {
+    const newLang = i18n.language === 'ko' ? 'en' : 'ko';
+    i18n.changeLanguage(newLang);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault(); 
 
-    if (!isLoginMode) {
-      // 1. 회원가입 모드일 때
-      // 가짜로 가입 성공 메시지를 띄우고, 로그인 모드로 화면을 전환합니다.
-      alert("🎉 회원가입이 성공적으로 완료되었습니다!\n방금 가입하신 정보로 로그인해 주세요.");
-      setIsLoginMode(true); // 다시 로그인 화면으로 State 변경
-    } else {
-      // 2. 로그인 모드일 때
-      // 메인 대시보드로 넘어가는 함수를 실행합니다.
-      onLogin(); 
+    try {
+      if (!isLoginMode) {
+        await api.post('/auth/signup', {
+          email: email,
+          password: password
+        });
+
+        alert(t('alert_signup_success')); // ✨ 알림창도 다국어 적용
+        setIsLoginMode(true); 
+      } else {
+        const response = await api.post('/auth/login', {
+          email: email,
+          password: password
+        });
+
+        const { access_token, refresh_token } = response.data;
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('refresh_token', refresh_token);
+
+        onLogin(); 
+      }
+    } catch (error) {
+      // ✨ [object Object] 에러 방지용 상세 처리 로직
+      const detail = error.response?.data?.detail;
+      const errorMessage = Array.isArray(detail) ? detail[0].msg : (detail || t('alert_error_default'));
+      alert(t('alert_fail') + errorMessage);
     }
   };
 
   return (
     <LoginContainer>
       <LoginBox>
+        {/* ✨ 다국어 스위치 버튼 추가 */}
+        <LangButton type="button" onClick={toggleLanguage}>
+          {t('toggle_lang')}
+        </LangButton>
+
         <LogoArea>
           <LogoTitle>⚖️ Juri-Sim</LogoTitle>
-          <LogoSub>인공지능 법률 시뮬레이션 서비스</LogoSub>
+          <LogoSub>{t('logo_sub')}</LogoSub>
         </LogoArea>
 
         <form onSubmit={handleSubmit}>
           {!isLoginMode && (
             <InputGroup>
               <IconWrapper><User size={20} /></IconWrapper>
-              <Input type="text" placeholder="이름 (홍길동)" required />
+              <Input 
+                type="text" 
+                placeholder={t('name_placeholder')} 
+                value={name} 
+                onChange={(e) => setName(e.target.value)} 
+                required 
+              />
             </InputGroup>
           )}
 
           <InputGroup>
             <IconWrapper><Mail size={20} /></IconWrapper>
-            <Input type="email" placeholder="이메일 주소" required />
+            <Input 
+              type="email" 
+              placeholder={t('email_placeholder')} 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              required 
+            />
           </InputGroup>
 
           <InputGroup>
             <IconWrapper><Lock size={20} /></IconWrapper>
-            <Input type="password" placeholder="비밀번호" required />
+            <Input 
+              type="password" 
+              placeholder={t('password_placeholder')} 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              required 
+            />
           </InputGroup>
 
           <SubmitButton type="submit">
-            {isLoginMode ? '로그인' : '회원가입 완료'}
+            {isLoginMode ? t('login_btn') : t('signup_btn')}
           </SubmitButton>
         </form>
 
         <ToggleText>
-          {isLoginMode ? '아직 계정이 없으신가요?' : '이미 계정이 있으신가요?'}
+          {isLoginMode ? t('no_account') : t('have_account')}
           <span onClick={() => setIsLoginMode(!isLoginMode)}>
-            {isLoginMode ? '회원가입하기' : '로그인하기'}
+            {isLoginMode ? t('go_signup') : t('go_login')}
           </span>
         </ToggleText>
       </LoginBox>
