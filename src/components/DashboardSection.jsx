@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { ChevronDown, ChevronUp } from 'lucide-react'; 
+import { useTranslation } from 'react-i18next'; // ✨ 다국어 훅 추가
 
 // ✨ 완성된 캐릭터 이미지를 불러옵니다!
 import juriAvatar from '../assets/jurisimcharH.png'; 
@@ -34,26 +35,24 @@ const CasesCard = styled(Card)`
 // --- ✨ 캐릭터와 차트를 배치하는 Wrapper ---
 const ChartCharacterWrapper = styled.div`
   display: flex;
-  align-items: center; /* 세로 중앙 정렬 */
+  align-items: center; 
   justify-content: space-between; 
-  gap: 1px; /* 캐릭터가 커졌으니 간격을 살짝 더 넓혔습니다 */
+  gap: 1px; 
   margin: 10px 0; 
 `;
-1
+
 const SVGContainer = styled.div`
-  flex: 1; /* 차트가 남는 공간을 꽉 채우게 */
+  flex: 1; 
   min-width: 0;
 `;
 
-// ✨ 캐릭터 이미지 전용 스타일 (동그라미 해제 & 크기 증가)
+// ✨ 캐릭터 이미지 전용 스타일 
 const JuriAvatar = styled.img`
-  width: 160px; /* 125px -> 160px로 크기를 시원하게 키웠습니다 */
-  height: auto; /* 원본 그림의 비율을 그대로 유지 */
-  object-fit: contain; /* 이미지가 잘리지 않게 설정 */
+  width: 160px; 
+  height: auto; 
+  object-fit: contain; 
   flex-shrink: 0 
-  /* border-radius와 background-color는 삭제했습니다! */
 `;
-
 
 // --- 아코디언 전용 스타일 ---
 const AccordionList = styled.div`
@@ -105,6 +104,7 @@ const AccordionContent = styled.div`
 
 // ==================== 데이터 및 메인 컴포넌트 ====================
 
+// (모의 데이터는 실제 AI가 답변하는 부분이라 가정하고 한글로 유지합니다)
 const mockCases = [
   {
     id: 1,
@@ -127,6 +127,7 @@ const mockCases = [
 ];
 
 const DashboardSection = () => {
+  const { t } = useTranslation(); // ✨ 다국어 번역 함수 꺼내기
   const [gaugeProgress, setGaugeProgress] = useState(0);
   const [openCaseId, setOpenCaseId] = useState(1); 
 
@@ -143,14 +144,14 @@ const DashboardSection = () => {
     <RightSection>
       {/* 1. 신뢰도 게이지 카드 */}
       <GaugeCard>
-        <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 700, color: '#1a2533' }}>📈 신뢰도 분석 결과</h3>
+        {/* ✨ 제목에 다국어 적용 */}
+        <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 700, color: '#1a2533' }}>
+          {t('dash_reliability_title')}
+        </h3>
         
         <ChartCharacterWrapper>
-          
-          {/* ✨ 좌측: 부엉이 캐릭터 이미지 영역 (위치 변경!) */}
           <JuriAvatar src={juriAvatar} alt="법률 Owl 주리 캐릭터 아바타" />
 
-          {/* ✨ 우측: SVG 차트 영역 */}
           <SVGContainer>
             <svg 
               width="100%" 
@@ -177,17 +178,20 @@ const DashboardSection = () => {
               />
             </svg>
             <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '17px', fontWeight: 700 }}>
-              신뢰도 점수: <span style={{ color: '#34a853' }}>85% (매우 높음)</span>
+              {/* ✨ 점수 라벨에 다국어 적용 */}
+              {t('dash_score_label')} <span style={{ color: '#34a853' }}>85% {t('dash_score_high')}</span>
             </div>
           </SVGContainer>
 
         </ChartCharacterWrapper>
-
       </GaugeCard>
 
       {/* 2. 유사 판례 검색 결과 카드 */}
       <CasesCard>
-        <h3 style={{ margin: '0 0 22px 0', fontSize: '18px', fontWeight: 700, color: '#1a2533' }}>📄 유사 판례 검색 결과</h3>
+        {/* ✨ 제목에 다국어 적용 */}
+        <h3 style={{ margin: '0 0 22px 0', fontSize: '18px', fontWeight: 700, color: '#1a2533' }}>
+          {t('dash_cases_title')}
+        </h3>
         
         <AccordionList>
           {mockCases.map((caseItem) => {

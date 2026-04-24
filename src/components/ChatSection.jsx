@@ -2,9 +2,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import { Send } from 'lucide-react';
+import { useTranslation } from 'react-i18next'; // ✨ 다국어 훅 추가
 
 // ✨ 메인 차트와 동일한 캐릭터 이미지를 불러옵니다!
-// 이미지 파일이 src/assets/jurisimcharN.png 에 있어야 합니다.
 import juriAvatar from '../assets/jurisimcharN.png'; 
 
 // ==================== Styled Components ====================
@@ -64,17 +64,15 @@ const Bubble = styled.div`
       `}
 `;
 
-// ✨ 아바타 스타일 수정 (텍스트 div -> 이미지 img)
-// 이번에는 요청하신 대로 원안에 쏙 들어가도록 동그랗게 처리했습니다.
 const Avatar = styled.img`
-  width: 38px; /* 챗봇용 아바타 크기 */
+  width: 38px; 
   height: 38px;
-  border-radius: 50%; /* ✨ 이미지를 동그랗게 만듭니다! */
-  object-fit: cover; /* 이미지가 찌그러지지 않게 비율 유지하며 꽉 채움 */
-  flex-shrink: 0; /* 크기가 줄어들지 않게 고정 */
-  margin-top: -2px; /* 말풍선 세로 위치와 살짝 맞추기 */
-  background-color: #fce8e6; /* 임시 배경색 (원형 프레임 포인트) */
-  border: 1px solid #e0e0e0; /* 아바타 테두리 추가 */
+  border-radius: 50%; 
+  object-fit: cover; 
+  flex-shrink: 0; 
+  margin-top: -2px; 
+  background-color: #fce8e6; 
+  border: 1px solid #e0e0e0; 
 `;
 
 const InputArea = styled.div`
@@ -131,7 +129,9 @@ const SendButton = styled.button`
 
 // ==================== Main Component ====================
 const ChatSection = () => {
-  // 초기 대화 메시지
+  const { t } = useTranslation(); // ✨ 다국어 번역 함수 꺼내기
+  
+  // (모의 대화 데이터는 백엔드 실시간 데이터로 취급하여 한글로 유지합니다)
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -158,23 +158,16 @@ const ChatSection = () => {
   const [inputValue, setInputValue] = useState('');
   const chatWindowRef = useRef(null);
 
-  // 새 메시지 추가 시 자동 스크롤
   useEffect(() => {
     if (chatWindowRef.current) {
       chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // 전송 핸들러
   const handleSend = () => {
     const trimmed = inputValue.trim();
-    
-    // 아무것도 입력하지 않았을 때만 전송 무시
-    if (trimmed.length === 0) {
-      return;
-    }
+    if (trimmed.length === 0) return;
 
-    // 사용자 메시지 추가
     const userMessage = {
       id: Date.now(),
       type: 'user',
@@ -183,7 +176,6 @@ const ChatSection = () => {
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
 
-    // 1.2초 후 봇 답변 시뮬레이션
     setTimeout(() => {
       const botReply = {
         id: Date.now() + 1,
@@ -194,7 +186,6 @@ const ChatSection = () => {
     }, 1200);
   };
 
-  // Enter 키 입력 지원
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -205,35 +196,27 @@ const ChatSection = () => {
   return (
     <LeftSection>
       <ChatCard>
-        {/* 대화창 */}
         <ChatWindow ref={chatWindowRef}>
           {messages.map((msg) => (
             <MessageContainer key={msg.id} $isUser={msg.type === 'user'}>
-              
-              {/* ✨ 봇 아이콘 수정: 이모지 대신 이미지 소스를 사용 */}
               {msg.type === 'juri' && (
                 <Avatar src={juriAvatar} alt="법률 Owl 주리 캐릭터 아바타" />
               )}
-              
-              {/* 말풍선 */}
               <Bubble $isUser={msg.type === 'user'}>{msg.text}</Bubble>
-
-              {/* 사용자 아이콘 (오른쪽) */}
               {msg.type === 'user' && (
-                <div style={{ font_size: '26px', flex_shrink: 0, margin_top: '2px' }}>👤</div>
+                <div style={{ fontSize: '26px', flexShrink: 0, marginTop: '2px' }}>👤</div>
               )}
             </MessageContainer>
           ))}
         </ChatWindow>
 
-        {/* 입력창 */}
         <InputArea>
           <InputField
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="법률 고민을 자유롭게 말씀해 주세요..."
+            placeholder={t('chat_placeholder')} /* ✨ 플레이스홀더에 다국어 적용 */
           />
           <SendButton onClick={handleSend}>
             <Send size={22} />

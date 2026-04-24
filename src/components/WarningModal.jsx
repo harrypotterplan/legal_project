@@ -2,7 +2,9 @@
 import React from 'react';
 import styled from 'styled-components';
 import { AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next'; // ✨ 1. 다국어 마법사 불러오기
 
+// ==================== Styled Components ====================
 const Overlay = styled.div`
   position: fixed;
   top: 0;
@@ -56,7 +58,6 @@ const Description = styled.p`
   margin: 0 0 24px 0;
 `;
 
-// ✨ 닫기 버튼을 하나만 남기고, 눈에 띄는 남색(Primary)으로 변경했습니다.
 const CloseButton = styled.button`
   width: 100%;
   padding: 14px 0;
@@ -74,21 +75,27 @@ const CloseButton = styled.button`
   }
 `;
 
+// ==================== Main Component ====================
 const WarningModal = ({ onClose }) => {
+  const { t } = useTranslation(); // ✨ 2. 번역 함수(t) 꺼내기
+
   return (
     <Overlay>
       <ModalBox>
         <WarningIcon>
           <AlertTriangle size={32} />
         </WarningIcon>
-        <Title>중요: 전문적인 법률 상담이 필요합니다</Title>
+        
+        {/* ✨ 3. 한글 생글씨들을 t('단어키') 로 교체! */}
+        <Title>{t('warning_title')}</Title>
         <Description>
-          시뮬레이션 신뢰도 점수가 낮아 사안이 복잡할 수 있습니다.<br />
-          정확한 법률 상담을 위해 법률 전문가와 상담할 것을 권장합니다.
+          {t('warning_desc_1')}<br />
+          {t('warning_desc_2')}
         </Description>
         
-        {/* 버튼이 하나뿐이므로, 이 버튼이 모달을 닫는 역할을 확실히 수행합니다 */}
-        <CloseButton onClick={onClose}>결과 확인</CloseButton>
+        <CloseButton onClick={onClose}>
+          {t('warning_btn')}
+        </CloseButton>
       </ModalBox>
     </Overlay>
   );
