@@ -28,6 +28,7 @@ class UserSearchLog(Base):
     user_id = Column(Integer, ForeignKey("users.user_id"))
     user_query = Column(Text, nullable=False)
     ai_response = Column(Text, nullable=True)
+    ai_response_en = Column(Text)    # ⭐️ 영어 답변 저장용
     reliability_score = Column(Integer, nullable=True)
     used_tokens = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

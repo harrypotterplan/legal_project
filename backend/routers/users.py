@@ -13,7 +13,7 @@ def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 # 2. 마이페이지 프로필 및 비밀번호 통합 수정
-@router.put("/me", response_model=schemas.UserResponse)
+@router.put("/me")#response_model=schemas.UserResponse를 삭제 이 설정때문에 깔끔한 리턴이 안됨.
 def update_user_profile(
     payload: schemas.UserUpdate,
     db: Session = Depends(get_db),
@@ -36,5 +36,9 @@ def update_user_profile(
     # 3. DB에 최종 저장
     db.commit()
     db.refresh(current_user)
-    
-    return current_user
+
+    # 4. 프론트엔드에 응답 (수정된 유저 정보나 성공 메시지 리턴)
+    return {
+        "message": "회원 정보가 성공적으로 수정되었습니다.",
+        "username": current_user.username
+    }
