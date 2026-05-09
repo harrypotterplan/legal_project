@@ -10,8 +10,7 @@ from ml.pipeline import validate_input, search_cases, calc_reliability, call_gem
 
 router = APIRouter(prefix="/api/v1/legal", tags=["Legal"])
 
-# ⭐️ 추가/수정: 리턴값이 한/영 2개로 늘어나서 기존 스키마(SimulationResponse)랑 충돌할 수 있으므로 임시로 response_model 제거
-@router.post("/simulate") 
+@router.post("/simulate", response_model=schemas.SimulationResponse)
 def simulate_legal_case(
     request: schemas.SimulationRequest, 
     db: Session = Depends(get_db), 
@@ -30,8 +29,8 @@ def simulate_legal_case(
     if not cases:
         raise HTTPException(status_code=404, detail="관련 판례를 찾을 수 없습니다.")
 
-    #  신뢰도 계산 (카테고리 정보가 request에 없다면 임시로 '일반' 세팅)
-    category = getattr(request, 'category', '일반')
+    # 검색된 판례와 사용자가 선택한 카테고리를 기반으로 신뢰도 계산
+    category = request.category
     reliability = calc_reliability(cases, category)
 
     # 2. 나중에 여기에 파인튜닝된 LLM 프롬프트 및 답변 생성 로직 추가 -> (완료: Gemini 호출)
@@ -48,15 +47,18 @@ def simulate_legal_case(
     # dummy_answer = f"'{request.query}'에 대한 AI 시뮬레이션 결과입니다. 사기죄 성립 가능성이 있습니다."
     # dummy_cases = ["대법원 2021도12345", "대법원 2020다6789"]
     
-    # 3. 검색 기록 DB에 저장 (C)
+    # 3. 검색 기록 DB에 저장
     new_log = models.UserSearchLog(
         user_id=current_user.user_id,
-        user_query=request.query,  # query -> user_query 로 변경
-        # DB 컬럼에는 딕셔너리를 못 넣으니까, 메인 언어인 한국어 답변만 대표로 뽑아서 저장
-        ai_response=ai_answer_dict.get("kr", "응답 오류") 
+        user_query=request.query,
+        ai_response=ai_answer_dict.get("kr", "응답 오류"),
+        ai_response_en=ai_answer_dict.get("en", "English error"),
+        reliability_score=reliability
     )
+
     db.add(new_log)
     db.commit()
+    db.refresh(new_log)
     
     # 4. 프론트엔드에 응답
     return {

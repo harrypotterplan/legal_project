@@ -24,12 +24,20 @@ class UserCreate(BaseModel):
 class LogResponse(BaseModel):
     log_id: int
     user_query: str
-    ai_response: str
-    reliability_score: Optional[int] = None
+    ai_response: Optional[str] = None
+    ai_response_en: Optional[str] = None 
+    reliability_score: Optional[float] = None
     created_at: datetime
     
     class Config:
         from_attributes = True
+
+
+class LogListResponse(BaseModel):
+    total: int
+    page: int
+    size: int
+    items: List[LogResponse]
 
 class UserUpdate(BaseModel):
     username: str = Field(..., min_length=2, max_length=10)
@@ -41,12 +49,11 @@ class UserResponse(BaseModel):
     user_id: int
     email: str
     username: str
-    search_logs: List[LogResponse] = []
+    search_logs: List[LogResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
 
-# schemas.py 맨 아래에 추가해 줘
 
 # 3. 로그인 요청 규격
 class UserLogin(BaseModel):
@@ -79,7 +86,8 @@ class SimulationRequest(BaseModel):
         return html.escape(v)
 
 class SimulationResponse(BaseModel):
-    answer: str
+    answer_kr: str
+    answer_en: str
     reliability_score: float
     reference_cases: list[str]
 
