@@ -1,15 +1,15 @@
 // src/App.jsx
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'; // ✨ 라우터 부품
-import { useTranslation } from 'react-i18next'; // ✨ 다국어 마법사
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'; 
+import { useTranslation } from 'react-i18next'; 
 
 import Header from './components/Header';
 import ChatSection from './components/ChatSection';
 import DashboardSection from './components/DashboardSection';
 import WarningModal from './components/WarningModal';
 import LoginPage from './components/LoginPage'; 
-import MyPage from './components/MyPage'; // ✨ 새로 만든 마이페이지
+import MyPage from './components/MyPage'; 
 
 // ==================== Styled Components ====================
 const AppContainer = styled.div`
@@ -30,12 +30,14 @@ const MainContent = styled.main`
 `;
 
 // ==================== App Content (실제 내용물) ====================
-// ✨ 라우터(화면 이동) 기능을 쓰기 위해 알맹이를 따로 뺐습니다.
 const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate(); // ✨ 주소 이동 도구
+  const navigate = useNavigate(); 
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // ✨ 1번 추가: AI 서버에서 받아온 결과를 담을 '빈 상자' 만들기
+  const [aiResult, setAiResult] = useState(null);
 
   const triggerLowScore = () => {
     setIsModalOpen(true);
@@ -47,7 +49,7 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
     
     alert(t('logout_alert')); 
     setIsLoggedIn(false); 
-    navigate('/'); // 로그아웃하면 기본 주소로 이동
+    navigate('/'); 
   };
 
   const toggleLanguage = () => {
@@ -63,12 +65,10 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
     <AppContainer>
       {/* 상단 헤더 및 버튼 영역 */}
       <div style={{ display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f0f0f0' }}>
-        {/* ✨ 헤더를 누르면 메인 화면으로 돌아오게 onClick 추가 */}
         <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => navigate('/')}>
           <Header />
         </div>
         
-        {/* 우측 버튼 그룹 영역 (원우님 기존 스타일 100% 복구!) */}
         <div style={{ display: 'flex', gap: '12px', marginRight: '32px' }}>
           
           <button 
@@ -78,7 +78,6 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
             {t('toggle_lang')}
           </button>
 
-          {/* ✨ 마이페이지 이동 버튼 (다국어 버튼과 같은 하얀색 스타일 적용) */}
           <button 
             onClick={() => navigate('/mypage')} 
             style={{ padding: '8px 16px', background: '#ffffff', color: '#4b5563', border: '1px solid #d1d5db', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s' }}
@@ -86,7 +85,6 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
             👤 {t('mypage_btn')}
           </button>
 
-          {/* 테스트 버튼 (원우님표 예쁜 빨간색 복구!) */}
           <button 
             onClick={triggerLowScore} 
             style={{ padding: '8px 16px', background: '#fce8e6', color: '#ea4335', border: '1px solid #fad2cf', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s' }}
@@ -94,7 +92,6 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
             {t('test_btn')}
           </button>
           
-          {/* 로그아웃 버튼 */}
           <button 
             onClick={handleLogout} 
             style={{ padding: '8px 16px', background: '#f3f4f6', color: '#4b5563', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s' }}
@@ -105,13 +102,15 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
         </div>
       </div>
 
-      {/* ✨ 화면이 주소에 따라 휙휙 바뀌는 마법의 공간 */}
       <Routes>
         {/* 기본 주소(/)일 때는 원래 챗봇과 대시보드를 보여줌 */}
         <Route path="/" element={
           <MainContent>
-            <ChatSection />
-            <DashboardSection />
+            {/* ✨ 2번 추가: ChatSection이 AI 결과를 빈 상자에 담을 수 있도록 함수(setAiResult)를 넘겨줌 */}
+            <ChatSection setAiResult={setAiResult} />
+            
+            {/* ✨ 3번 추가: 상자에 담긴 결과물(aiResult)을 DashboardSection이 가져가서 화면에 그리도록 넘겨줌 */}
+            <DashboardSection resultData={aiResult} />
           </MainContent>
         } />
         
@@ -127,7 +126,6 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
 };
 
 // ==================== 최상단 App Component ====================
-// ✨ Router로 앱 전체를 감싸줍니다.
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 

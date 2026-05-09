@@ -43,10 +43,34 @@ const resources = {
       chat_placeholder: "법률 고민을 자유롭게 말씀해 주세요...",
       send_btn: "전송",
 
-      // --- 마이페이지 (MyPage) ---
-      history_title: "최근 시뮬레이션 기록",
+      // --- 마이페이지 (MyPage) 공통 ---
       user_name_label: "사용자 이름",
       edit_profile_btn: "프로필 수정",
+      
+      // ✨ 6주차: 탭 메뉴 
+      tab_history: "기록",
+      tab_scrap: "스크랩북",
+      tab_stats: "통계",
+      tab_settings: "설정",
+      
+      // ✨ 6주차: 탭 콘텐츠 제목
+      history_title: " 최근 시뮬레이션 기록",
+      scrap_title: " 나의 판례 스크랩북",
+      stats_title: " 나의 Juri-Sim 이용 통계",
+      settings_title: " 계정 및 서비스 설정",
+      
+      // ✨ 6주차: 통계 위젯
+      stat_total_consult: "총 상담 건수",
+      stat_top_category: "가장 많이 찾은 분야",
+      stat_scrap_count: "스크랩한 판례",
+      stat_solved: "해결된 고민",
+      
+      // ✨ 6주차: 설정 및 알림
+      btn_disclaimer: "법률 서비스 면책 조항 (Legal Disclaimer)",
+      btn_delete_account: "회원 탈퇴 및 모든 데이터 삭제",
+      confirm_delete: "정말 탈퇴하시겠습니까? 모든 상담 기록과 스크랩이 영구 삭제됩니다.",
+      alert_delete_success: "탈퇴 처리가 완료되었습니다. (추후 백엔드 API 연동 필요)",
+      alert_disclaimer: "⚖️ 법률 서비스 면책 조항\n\n본 Juri-Sim 서비스가 제공하는 시뮬레이션 결과 및 유사 판례 정보는 법적 효력을 갖지 않으며, 단순 참고용입니다. 실제 법적 분쟁 시 반드시 전문 변호사와 상담하시기 바랍니다.",
       
       // --- 프로필 수정 모달 ---
       edit_modal_title: "프로필 수정",
@@ -103,10 +127,34 @@ const resources = {
       chat_placeholder: "Please feel free to tell us your legal concerns...",
       send_btn: "Send",
 
-      // --- My Page ---
-      history_title: "Recent Simulation History",
+      // --- My Page Common ---
       user_name_label: "Username",
       edit_profile_btn: "Edit Profile",
+      
+      // ✨ Week 6: Tab Menu
+      tab_history: "History",
+      tab_scrap: "Scrapbook",
+      tab_stats: "Statistics",
+      tab_settings: "Settings",
+      
+      // ✨ Week 6: Tab Content Titles
+      history_title: " Recent Simulation History",
+      scrap_title: " My Case Scrapbook",
+      stats_title: " My Juri-Sim Statistics",
+      settings_title: " Account & Service Settings",
+      
+      // ✨ Week 6: Stats Widget
+      stat_total_consult: "Total Consultations",
+      stat_top_category: "Top Category",
+      stat_scrap_count: "Scrapped Cases",
+      stat_solved: "Solved Issues",
+      
+      // ✨ Week 6: Settings & Alerts
+      btn_disclaimer: "Legal Disclaimer",
+      btn_delete_account: "Delete Account & All Data",
+      confirm_delete: "Are you sure you want to delete your account? All history and scraps will be permanently deleted.",
+      alert_delete_success: "Account deletion completed. (Backend API integration needed later)",
+      alert_disclaimer: "⚖️ Legal Disclaimer\n\nThe simulation results and case information provided by Juri-Sim do not have legal effect and are for reference only. Please consult a professional lawyer for actual legal disputes.",
 
       // --- Profile Edit Modal ---
       edit_modal_title: "Edit Profile",

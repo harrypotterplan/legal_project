@@ -1,11 +1,10 @@
 // src/components/ChatSection.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { Send } from 'lucide-react';
-import { useTranslation } from 'react-i18next'; // ✨ 다국어 훅 추가
-
-// ✨ 메인 차트와 동일한 캐릭터 이미지를 불러옵니다!
+import { Send, Hash } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import juriAvatar from '../assets/jurisimcharN.png'; 
+import { api } from '../api';
 
 // ==================== Styled Components ====================
 const LeftSection = styled.section`
@@ -49,8 +48,8 @@ const Bubble = styled.div`
   padding: 15px 20px;
   border-radius: 22px;
   font-size: 15.5px;
-  line-height: 1.5;
-  white-space: pre-line;
+  line-height: 1.6;
+  white-space: pre-wrap; /* ✨ 줄바꿈 유지 */
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
   ${(props) =>
     props.$isUser
@@ -75,13 +74,39 @@ const Avatar = styled.img`
   border: 1px solid #e0e0e0; 
 `;
 
-const InputArea = styled.div`
-  padding: 18px 24px 24px;
+const InputWrapper = styled.div`
   border-top: 1px solid #f0f0f0;
+  background: #ffffff;
+  padding: 16px 24px 24px;
+`;
+
+const CategoryRow = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+`;
+
+const CategoryBtn = styled.button`
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid ${(props) => (props.$active ? '#2c3e50' : '#e5e7eb')};
+  background: ${(props) => (props.$active ? '#2c3e50' : 'white')};
+  color: ${(props) => (props.$active ? 'white' : '#6b7280')};
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${(props) => (props.$active ? '#2c3e50' : '#f9fafb')};
+  }
+`;
+
+const InputArea = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #ffffff;
 `;
 
 const InputField = styled.input`
@@ -98,8 +123,9 @@ const InputField = styled.input`
     box-shadow: 0 0 0 4px rgba(44, 62, 80, 0.1);
   }
 
-  &::placeholder {
-    color: #9ca3af;
+  &:disabled {
+    background: #f3f4f6;
+    cursor: not-allowed;
   }
 `;
 
@@ -122,41 +148,29 @@ const SendButton = styled.button`
     transform: scale(1.05);
   }
 
-  &:active {
-    transform: scale(0.95);
+  &:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
   }
 `;
 
 // ==================== Main Component ====================
-const ChatSection = () => {
-  const { t } = useTranslation(); // ✨ 다국어 번역 함수 꺼내기
+const ChatSection = ({ setAiResult }) => {
+  const { t } = useTranslation();
   
-  // (모의 대화 데이터는 백엔드 실시간 데이터로 취급하여 한글로 유지합니다)
+  const [selectedCategory, setSelectedCategory] = useState("임대차");
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const chatWindowRef = useRef(null);
+
   const [messages, setMessages] = useState([
     {
       id: 1,
       type: 'juri',
-      text: "안녕하세요! '주리'입니다. 법률 고민이 있으신가요?\n무엇이든 편하게 물어봐 주세요! 😊",
-    },
-    {
-      id: 2,
-      type: 'user',
-      text: '임대차 보증금 미반환 건으로 고민이 많습니다.\n계약 기간이 끝났는데도 집주인이 돈을 돌려주지 않아요...',
-    },
-    {
-      id: 3,
-      type: 'juri',
-      text: '네, 임대차 관련 고민이시군요. 유사 판례를 분석하고 있습니다... ⏳',
-    },
-    {
-      id: 4,
-      type: 'juri',
-      text: '분석 완료! 이 케이스의 신뢰도는 85%로 매우 높음입니다.\n오른쪽에서 상세 정보를 확인해 보세요!',
-    },
+      text: "안녕하세요! '주리'입니다. 법률 고민이 있으신가요?\n분야를 선택하고 상황을 10자 이상 자세히 설명해 주세요! 😊",
+    }
   ]);
-
-  const [inputValue, setInputValue] = useState('');
-  const chatWindowRef = useRef(null);
 
   useEffect(() => {
     if (chatWindowRef.current) {
@@ -164,30 +178,56 @@ const ChatSection = () => {
     }
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = inputValue.trim();
-    if (trimmed.length === 0) return;
+    if (trimmed.length < 10) {
+      alert("상황을 정확히 파악하기 위해 최소 10자 이상 입력해 주세요.");
+      return;
+    }
 
-    const userMessage = {
-      id: Date.now(),
-      type: 'user',
-      text: trimmed,
-    };
+    // 유저 메시지 렌더링
+    const userMessage = { id: Date.now(), type: 'user', text: `[${selectedCategory}] ${trimmed}` };
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
+    setIsSimulating(true);
 
-    setTimeout(() => {
-      const botReply = {
-        id: Date.now() + 1,
-        type: 'juri',
-        text: '추가 분석을 완료했습니다.\n오른쪽 대시보드를 확인해 주세요! 📊',
-      };
-      setMessages((prev) => [...prev, botReply]);
-    }, 1200);
+    // AI 로딩 메시지 렌더링
+    const loadingId = Date.now() + 1;
+    setMessages((prev) => [...prev, {
+      id: loadingId, type: 'juri', text: '판례를 검색하고 AI 분석을 진행 중입니다...\n잠시만 기다려 주세요. ⏳'
+    }]);
+
+    try {
+      // API 통신
+      const response = await api.post('/legal/simulate', {
+        query: trimmed,
+        category: selectedCategory
+      });
+
+      // ✨ AI 응답을 챗봇 말풍선에 덮어씌움
+      setMessages((prev) => prev.map(msg => 
+        msg.id === loadingId 
+        ? { ...msg, text: response.data.answer_kr } 
+        : msg
+      ));
+
+      // 부모로 데이터 전달 (대시보드 업데이트용)
+      if(setAiResult) {
+        setAiResult(response.data);
+      }
+
+    } catch (error) {
+      const errorMsg = error.response?.data?.detail || "분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+      setMessages((prev) => prev.map(msg => 
+        msg.id === loadingId ? { ...msg, text: `⚠️ 죄송합니다. ${errorMsg}` } : msg
+      ));
+    } finally {
+      setIsSimulating(false);
+    }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !isSimulating) {
       e.preventDefault();
       handleSend();
     }
@@ -200,7 +240,7 @@ const ChatSection = () => {
           {messages.map((msg) => (
             <MessageContainer key={msg.id} $isUser={msg.type === 'user'}>
               {msg.type === 'juri' && (
-                <Avatar src={juriAvatar} alt="법률 Owl 주리 캐릭터 아바타" />
+                <Avatar src={juriAvatar} alt="Juri Avatar" />
               )}
               <Bubble $isUser={msg.type === 'user'}>{msg.text}</Bubble>
               {msg.type === 'user' && (
@@ -210,18 +250,36 @@ const ChatSection = () => {
           ))}
         </ChatWindow>
 
-        <InputArea>
-          <InputField
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={t('chat_placeholder')} /* ✨ 플레이스홀더에 다국어 적용 */
-          />
-          <SendButton onClick={handleSend}>
-            <Send size={22} />
-          </SendButton>
-        </InputArea>
+        <InputWrapper>
+          <CategoryRow>
+            <Hash size={14} color="#6b7280" />
+            <span style={{ fontSize: '13px', color: '#6b7280', fontWeight: 600 }}>상담 분야:</span>
+            {['임대차', '근로', '소비자'].map(cat => (
+              <CategoryBtn 
+                key={cat} 
+                $active={selectedCategory === cat} 
+                onClick={() => setSelectedCategory(cat)}
+                disabled={isSimulating}
+              >
+                {cat}
+              </CategoryBtn>
+            ))}
+          </CategoryRow>
+          
+          <InputArea>
+            <InputField
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={isSimulating ? "AI가 답변을 작성하고 있습니다..." : t('chat_placeholder')}
+              disabled={isSimulating}
+            />
+            <SendButton onClick={handleSend} disabled={isSimulating || inputValue.trim().length === 0}>
+              <Send size={22} />
+            </SendButton>
+          </InputArea>
+        </InputWrapper>
       </ChatCard>
     </LeftSection>
   );
