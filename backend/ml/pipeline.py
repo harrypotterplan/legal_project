@@ -8,6 +8,7 @@ import google.generativeai as genai
 import time
 import os
 from dotenv import load_dotenv
+import json
 
 # ── 환경변수 로드 ─────────────────────────────────────────────────────
 load_dotenv()
@@ -144,7 +145,24 @@ SYSTEM_PROMPT = """당신은 한국 법률 판례 기반 AI 분석 시스템입�
 (이 분석의 한계와 전문가 상담 필요성 명시)
 
 [면책 조항]
-본 분석은 실제 판례를 기반으로 한 참고 정보이며, 법적 효력이 없습니다. 중요한 법률 문제는 반드시 변호사와 상담하시기 바랍니다."""
+본 분석은 실제 판례를 기반으로 한 참고 정보이며, 법적 효력이 없습니다. 중요한 법률 문제는 반드시 변호사와 상담하시기 바랍니다.
+
+[출력 형식]
+반드시 아래 JSON 형식으로만 응답하세요.
+JSON 앞뒤에 설명 문장, 마크다운 코드블록, ```json 같은 문구를 절대 붙이지 마세요.
+
+{
+  "kr": "한국어 답변",
+  "en": "English answer"
+}
+
+[주의]
+- kr에는 위 답변 구조를 따른 한국어 답변만 작성하세요.
+- en에는 kr 답변과 같은 의미의 영어 답변만 작성하세요.
+- JSON 문자열 안에서 줄바꿈이 필요하면 \\n을 사용하세요.
+- 큰따옴표를 깨뜨리는 문장을 만들지 마세요.
+
+"""
 
 # ── 프롬프트 조립 ─────────────────────────────────────────────────────
 def build_user_prompt(query: str, cases):
@@ -162,7 +180,17 @@ def build_user_prompt(query: str, cases):
 [사용자 질문]
 {query}
 
-위 판례만을 근거로 분석해주세요. 판례에 없는 내용은 생성하지 마세요."""
+위 판례만을 근거로 분석해주세요.
+판례에 없는 내용은 생성하지 마세요.
+
+반드시 아래 JSON 형식으로만 응답하세요.
+JSON 앞뒤에 다른 설명을 붙이지 마세요.
+
+{{
+  "kr": "한국어 답변",
+  "en": "English answer"
+}}.
+"""
 
 # ── Gemini 호출 ───────────────────────────────────────────────────────
 def call_gemini(query: str, cases):
@@ -187,9 +215,39 @@ def call_gemini(query: str, cases):
 
     answer_text = response.text
 
+    elapsed = round(time.time() - start, 2)
+
+    answer_text = response.text.strip()
+
+    # Gemini가 혹시 ```json 코드블록으로 감싸서 줄 경우 제거
+    if answer_text.startswith("```json"):
+        answer_text = answer_text.replace("```json", "", 1).strip()
+
+    if answer_text.startswith("```"):
+        answer_text = answer_text.replace("```", "", 1).strip()
+
+    if answer_text.endswith("```"):
+        answer_text = answer_text[:-3].strip()
+
+    try:
+        parsed = json.loads(answer_text)
+
+        kr_answer = parsed.get("kr", "")
+        en_answer = parsed.get("en", "")
+
+        if not kr_answer:
+            kr_answer = "한국어 응답 파싱 오류"
+        if not en_answer:
+            en_answer = "English response parsing error"
+
+    except json.JSONDecodeError:
+        # JSON 파싱 실패 시 서버가 터지지 않도록 fallback 처리
+        kr_answer = answer_text
+        en_answer = "English response parsing failed."
+
     return {
-        "kr": answer_text,
-        "en": answer_text,
+        "kr": kr_answer,
+        "en": en_answer,
     }, elapsed
 
 # ── 전체 파이프라인 (백엔드 연동용) ──────────────────────────────────
