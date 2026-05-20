@@ -13,40 +13,56 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Environment variables
+.env
+**/.env
+
 # Python virtual environment
 venv/
 .venv/
+**/venv/
+**/.venv/
 
 # Python cache
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
-
-# Environment variables
-.env
-backend/.env
 
 # Local DB
 *.db
 *.sqlite
 *.sqlite3
-backend/legal.db
 
 # ChromaDB / Vector DB
 chroma_db/
+chroma_db_law/
 backend/chroma_db/
+backend/chroma_db_law/
+**/chroma_db/
+**/chroma_db_law/
 
 # Local fine-tuned model
 jurisim-sbert-v4/
 backend/jurisim-sbert-v4/
+**/jurisim-sbert-v4/
+
+# Python / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea/
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*.tmp
+*.bak

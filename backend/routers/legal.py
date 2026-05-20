@@ -1,70 +1,119 @@
 # backend/routers/legal.py
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-import schemas, models
+
+import schemas
+import models
 from core.security import get_current_user
 from database import get_db
 
-# ml 폴더에서 AI 팀이 만든 핵심 함수들 싹 다 가져오기
-from ml.pipeline import validate_input, search_cases, calc_reliability, call_gemini
+# AI/ML 팀이 만든 전체 파이프라인 함수
+# 입력 검증, 질문 정규화, 판례 검색, 법령 검색, 신뢰도 계산, Gemini 답변 생성까지 내부에서 처리함
+from ml.pipeline import run_pipeline
+
 
 router = APIRouter(prefix="/api/v1/legal", tags=["Legal"])
 
+
+# 법률 시뮬레이션 API
+# 사용자가 입력한 법률 상황을 AI 파이프라인에 전달하고,
+# 결과를 DB에 저장한 뒤 프론트엔드에 반환한다.
 @router.post("/simulate", response_model=schemas.SimulationResponse)
 def simulate_legal_case(
-    request: schemas.SimulationRequest, 
-    db: Session = Depends(get_db), 
+    request: schemas.SimulationRequest,
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # 입력 검증 (AI팀 함수 재활용)
-    valid, msg = validate_input(request.query)
-    if not valid:
-        # 입력값이 이상하면 400 에러 뱉기
-        raise HTTPException(status_code=400, detail=msg)
+    """
+    법률 시뮬레이션 실행 흐름
 
-    # 1. 나중에 여기에 ChromaDB 검색 로직 추가 -> (완료: AI팀 search_cases 함수 연결)
-    cases = search_cases(request.query)
-    
-    # 판례가 안 나오면 에러 처리
-    if not cases:
-        raise HTTPException(status_code=404, detail="관련 판례를 찾을 수 없습니다.")
+    1. 프론트엔드에서 category, query를 받음
+    2. run_pipeline()으로 AI/ML 전체 파이프라인 실행
+    3. user_search_logs에 상담 결과 저장
+    4. used_case_mappings에 사용 판례 근거 저장
+    5. used_law_mappings에 사용 법령 근거 저장
+    6. AI 분석 결과를 프론트엔드에 반환
+    """
 
-    # 검색된 판례와 사용자가 선택한 카테고리를 기반으로 신뢰도 계산
-    category = request.category
-    reliability = calc_reliability(cases, category)
-
-    # 2. 나중에 여기에 파인튜닝된 LLM 프롬프트 및 답변 생성 로직 추가 -> (완료: Gemini 호출)
+    # 1. AI/ML 파이프라인 실행
     try:
-        # ⭐️ 수정: call_gemini는 이제 단순 텍스트가 아니라 딕셔너리({"kr": "...", "en": "..."})를 반환함!
-        ai_answer_dict, _ = call_gemini(request.query, cases)
+        result = run_pipeline(
+            query=request.query,
+            category=request.category
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI 서버 통신 오류: {str(e)}")
-    
-    # 프론트엔드에 던져줄 판례 이름만 리스트로 뽑아내기
-    ref_cases = [c['case_name'] for c in cases]
-    
-    # 임시(Mock) 데이터 생성 이제 안 쓰니까 주석 처리
-    # dummy_answer = f"'{request.query}'에 대한 AI 시뮬레이션 결과입니다. 사기죄 성립 가능성이 있습니다."
-    # dummy_cases = ["대법원 2021도12345", "대법원 2020다6789"]
-    
-    # 3. 검색 기록 DB에 저장
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI 파이프라인 오류: {str(e)}"
+        )
+
+    # 2. 파이프라인 결과에서 값 추출
+    answer = result.get("answer", "응답 오류")
+    summary = result.get("summary")
+    reliability_score = result.get("reliability_score", 0)
+    recommend_expert = result.get("recommend_expert", False)
+
+    # 3. 상담 기록 저장
+    # ai_response_en은 현재 사용하지 않으므로 저장하지 않음.
+    # used_tokens도 현재 pipeline.py에서 반환하지 않으므로 None으로 저장됨.
     new_log = models.UserSearchLog(
         user_id=current_user.user_id,
+        session_id=None,  # 세션 API 완전 연동 전까지는 None
+        category=request.category,
         user_query=request.query,
-        ai_response=ai_answer_dict.get("kr", "응답 오류"),
-        ai_response_en=ai_answer_dict.get("en", "English error"),
-        reliability_score=reliability
+        ai_response=answer,
+        summary=summary,
+        reliability_score=reliability_score,
+        recommend_expert=recommend_expert,
+        used_tokens=result.get("used_tokens")
     )
 
     db.add(new_log)
     db.commit()
     db.refresh(new_log)
-    
-    # 4. 프론트엔드에 응답
-    return {
-        # 프론트엔드에서 스위치 버튼으로 편하게 렌더링할 수 있게 한국어/영어 분리해서 쏴줌
-        "answer_kr": ai_answer_dict.get("kr", "한국어 응답 오류"), 
-        "answer_en": ai_answer_dict.get("en", "English error"),  
-        "reliability_score": reliability,  # AI팀 로직으로 계산된 신뢰도
-        "reference_cases": ref_cases       # 실제 검색된 판례 이름들
-    }
+
+    # 4. 유사 판례 근거 저장
+    # 현재는 case_laws.case_id FK를 쓰지 않음.
+    # ChromaDB 검색 결과를 used_case_mappings에 그대로 저장하는 스냅샷 방식.
+    #
+    # 주의:
+    # pipeline.py의 reference_cases 안에 있는 case_id는
+    # 현재 DB 정수 ID가 아니라 "2009도5302" 같은 사건번호 역할을 함.
+    # 따라서 case_id 값을 case_number로 저장함.
+    for idx, case in enumerate(result.get("reference_cases", []), start=1):
+        used_case = models.UsedCaseMapping(
+            log_id=new_log.log_id,
+            case_number=case.get("case_number") or case.get("case_id"),
+            case_name=case.get("case_name"),
+            court_name=case.get("court"),
+            judgment_date=str(case.get("date")) if case.get("date") is not None else None,
+            category=case.get("category"),
+            similarity=case.get("similarity"),
+            rank=idx
+        )
+        db.add(used_case)
+
+    # 5. 관련 법령 근거 저장
+    # 현재는 laws.law_id FK를 쓰지 않음.
+    # ChromaDB_law 검색 결과를 used_law_mappings에 그대로 저장하는 스냅샷 방식.
+    for idx, law in enumerate(result.get("reference_laws", []), start=1):
+        law_name = law.get("law_name")
+        article_number = law.get("article_number")
+
+        used_law = models.UsedLawMapping(
+            log_id=new_log.log_id,
+            law_key=f"{law_name}_{article_number}" if law_name and article_number else None,
+            law_name=law_name,
+            article_number=article_number,
+            category=law.get("category"),
+            similarity=law.get("similarity"),
+            rank=idx
+        )
+        db.add(used_law)
+
+    # 6. 판례/법령 근거 저장 반영
+    db.commit()
+
+    # 7. 프론트엔드에 응답 반환
+    return result

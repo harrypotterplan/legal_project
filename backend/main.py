@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 import models
 from database import engine
-from routers import auth, users, legal, history
+from routers import auth, users, legal, history, chat
 
 
 # 데이터베이스 초기화, SQLAlchemy ORM을 통한 데이터베이스 테이블 자동 생성
@@ -51,3 +51,4 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(legal.router)
 app.include_router(history.router)
+app.include_router(chat.router)
