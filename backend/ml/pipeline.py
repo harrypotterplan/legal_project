@@ -161,15 +161,20 @@ def normalize_with_gemini(query: str) -> str:
 SIMILARITY_THRESHOLD = 0.2
 
 
-def search_cases(query: str, n: int = 3):
+def search_cases(query: str, category: str = None, n: int = 3):
     if not HAS_CASE_DB or case_col is None:
         return []
 
     embedding = model.encode(query).tolist()
+
+    # ★ 변경: 카테고리 필터 적용
+    where_clause = {"category": category} if category else None
+
     results = case_col.query(
         query_embeddings=[embedding],
         n_results=n,
         include=["documents", "metadatas", "distances"],
+        where=where_clause,  # ★ 추가
     )
 
     cases = []
@@ -248,22 +253,20 @@ def calc_reliability(cases, query_category: str) -> float:
     if not cases:
         return 0.0
 
-    # S: 평균 코사인 유사도 (가중치 0.40)
+    # S: 평균 코사인 유사도 (가중치 0.50) — 비중 상향
     S = sum(c["similarity"] for c in cases) / len(cases)
 
-    # M: 카테고리 매칭률 (가중치 0.30)
+    # M: 카테고리 매칭률 (가중치 0.25)
     M = sum(1 for c in cases if c["category"] == query_category) / len(cases)
 
-    # C: 커버리지 (가중치 0.20)
-    C = len(cases) / 3
+    # C: 유사도 0.5 이상 판례만 유효로 계산 (가중치 0.15)
+    C = sum(1 for c in cases if c["similarity"] >= 0.5) / 3
 
     # T: 최신성 점수 (가중치 0.10)
     T = sum(calc_recency(c["date"]) for c in cases) / len(cases)
 
-    #공식이 너무 후한거 같아서 바꿈 기존: S * 0.40 + M * 0.30 + C * 0.20 + T * 0.10
-    score = S * 0.60 + M * 0.20 + C * 0.10 + T * 0.10
+    score = S * 0.50 + M * 0.25 + C * 0.15 + T * 0.10
     return round(score * 100, 1)
-
 
 # ── 시스템 프롬프트 ───────────────────────────────────────────────────
 SYSTEM_PROMPT = """당신은 한국 법률 판례 기반 AI 분석 시스템입니다.
@@ -348,7 +351,7 @@ def build_user_prompt(query: str, cases, laws):
 
 
 # ── Gemini 호출 (2차) ─────────────────────────────────────────────────
-def call_gemini(query: str, cases, laws):
+def call_gemini(query: str, cases, laws, chat_history=None):
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY가 설정되어 있지 않습니다.")
 
@@ -358,15 +361,28 @@ def call_gemini(query: str, cases, laws):
         system_instruction=SYSTEM_PROMPT,
     )
 
+    user_prompt = build_user_prompt(query, cases, laws)
+
     start = time.time()
 
-    response = gemini.generate_content(
-        build_user_prompt(query, cases, laws),
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=4096,
-            temperature=0.2,
-        ),
-    )
+    # ★ 변경: chat_history 있으면 멀티턴 chat, 없으면 단일 호출
+    if chat_history:
+        chat = gemini.start_chat(history=chat_history)
+        response = chat.send_message(
+            user_prompt,
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=4096,
+                temperature=0.2,
+            ),
+        )
+    else:
+        response = gemini.generate_content(
+            user_prompt,
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=4096,
+                temperature=0.2,
+            ),
+        )
 
     elapsed = round(time.time() - start, 2)
     return response.text, elapsed
@@ -378,7 +394,7 @@ def make_cache_key(query: str, category: str) -> str:
 
 
 # ── 전체 파이프라인 ───────────────────────────────────────────────────
-def run_pipeline(query: str, category: str):
+def run_pipeline(query: str, category: str, chat_history=None):
 
     # 1. 입력 검증
     valid, msg = validate_input(query)
@@ -408,7 +424,7 @@ def run_pipeline(query: str, category: str):
         return _cache[cache_key]
 
     # 4. 판례 + 법령 검색
-    cases = search_cases(search_query)
+    cases = search_cases(search_query, category)
     laws = search_laws(search_query, category)
 
     # 기존 코드:
@@ -469,7 +485,7 @@ def run_pipeline(query: str, category: str):
         # 변경:
         # 답변 생성은 사용자 원문 기준으로 수행
         # 정규화 문장은 검색용, 원문은 사용자 응답용으로 분리
-        gem_ans, gem_time = call_gemini(query, cases, laws)
+        gem_ans, gem_time = call_gemini(query, cases, laws, chat_history)
 
     except Exception as e:
         print(f"Gemini 답변 생성 오류: {e}")

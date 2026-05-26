@@ -1,5 +1,6 @@
 # backend/routers/legal.py
 
+import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -7,18 +8,22 @@ import schemas
 import models
 from core.security import get_current_user
 from database import get_db
-
-# AI/ML 팀이 만든 전체 파이프라인 함수
-# 입력 검증, 질문 정규화, 판례 검색, 법령 검색, 신뢰도 계산, Gemini 답변 생성까지 내부에서 처리함
 from ml.pipeline import run_pipeline
 
 
 router = APIRouter(prefix="/api/v1/legal", tags=["Legal"])
 
+# 멀티턴 컨텍스트에서 제외할 메시지 (에러 메시지가 들어가면 다음 답변 망침)
+ERROR_MARKERS = [
+    "AI 분석 중 오류",
+    "관련 판례와 법령을 찾을 수 없습니다",
+    "관련 판례는 찾을 수 없지만",
+    "10자 이상",
+    "1000자 이하",
+    "잘못된 입력",
+]
 
-# 법률 시뮬레이션 API
-# 사용자가 입력한 법률 상황을 AI 파이프라인에 전달하고,
-# 결과를 DB에 저장한 뒤 프론트엔드에 반환한다.
+
 @router.post("/simulate", response_model=schemas.SimulationResponse)
 def simulate_legal_case(
     request: schemas.SimulationRequest,
@@ -26,21 +31,65 @@ def simulate_legal_case(
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    법률 시뮬레이션 실행 흐름
-
-    1. 프론트엔드에서 category, query를 받음
-    2. run_pipeline()으로 AI/ML 전체 파이프라인 실행
-    3. user_search_logs에 상담 결과 저장
-    4. used_case_mappings에 사용 판례 근거 저장
-    5. used_law_mappings에 사용 법령 근거 저장
-    6. AI 분석 결과를 프론트엔드에 반환
+    실행 흐름:
+    1. session_id 검증 + category 자동 추출
+    2. 이전 대화 가져와서 chat_history 만들기 (멀티턴 컨텍스트)
+    3. AI 파이프라인 실행
+    4. UserSearchLog 저장
+    5. session 있으면 ChatMessage 두 개 자동 저장
+    6. UsedCaseMapping / UsedLawMapping 저장
     """
 
-    # 1. AI/ML 파이프라인 실행
+    # 1. session_id 검증 + category 자동 추출
+    session = None
+    if request.session_id is not None:
+        session = (
+            db.query(models.ChatSession)
+            .filter(
+                models.ChatSession.session_id == request.session_id,
+                models.ChatSession.user_id == current_user.user_id,
+            )
+            .first()
+        )
+        if not session:
+            raise HTTPException(
+                status_code=404,
+                detail="해당 상담 세션을 찾을 수 없습니다."
+            )
+        # session 있으면 session의 category 자동 사용
+        category = session.category
+    else:
+        # session 없으면 request의 category 사용 (schemas에서 필수 검증됨)
+        category = request.category
+
+    # 2. 이전 대화 가져오기 (멀티턴 컨텍스트)
+    chat_history = []
+    if session is not None:
+        previous = (
+            db.query(models.ChatMessage)
+            .filter(models.ChatMessage.session_id == session.session_id)
+            .order_by(models.ChatMessage.created_at.asc())
+            .all()
+        )
+        for msg in previous:
+            # 에러성 assistant 메시지는 history에서 제외
+            if msg.role == "assistant" and any(marker in msg.content for marker in ERROR_MARKERS):
+                continue
+            # Gemini는 role을 "user" / "model"로 씀
+            gemini_role = "user" if msg.role == "user" else "model"
+            chat_history.append({
+                "role": gemini_role,
+                "parts": [msg.content]
+            })
+        # 토큰 한도 보호: 최근 10개만 유지
+        chat_history = chat_history[-10:]
+
+    # 3. AI/ML 파이프라인 실행
     try:
         result = run_pipeline(
             query=request.query,
-            category=request.category
+            category=category,
+            chat_history=chat_history,
         )
     except Exception as e:
         raise HTTPException(
@@ -48,39 +97,44 @@ def simulate_legal_case(
             detail=f"AI 파이프라인 오류: {str(e)}"
         )
 
-    # 2. 파이프라인 결과에서 값 추출
+    # 4. 결과 추출
     answer = result.get("answer", "응답 오류")
     summary = result.get("summary")
     reliability_score = result.get("reliability_score", 0)
     recommend_expert = result.get("recommend_expert", False)
 
-    # 3. 상담 기록 저장
-    # ai_response_en은 현재 사용하지 않으므로 저장하지 않음.
-    # used_tokens도 현재 pipeline.py에서 반환하지 않으므로 None으로 저장됨.
+    # 5. 상담 기록 저장
     new_log = models.UserSearchLog(
         user_id=current_user.user_id,
-        session_id=None,  # 세션 API 완전 연동 전까지는 None
-        category=request.category,
+        session_id=request.session_id,
+        category=category,
         user_query=request.query,
         ai_response=answer,
         summary=summary,
         reliability_score=reliability_score,
         recommend_expert=recommend_expert,
-        used_tokens=result.get("used_tokens")
+        used_tokens=result.get("used_tokens"),
     )
-
     db.add(new_log)
     db.commit()
     db.refresh(new_log)
 
-    # 4. 유사 판례 근거 저장
-    # 현재는 case_laws.case_id FK를 쓰지 않음.
-    # ChromaDB 검색 결과를 used_case_mappings에 그대로 저장하는 스냅샷 방식.
-    #
-    # 주의:
-    # pipeline.py의 reference_cases 안에 있는 case_id는
-    # 현재 DB 정수 ID가 아니라 "2009도5302" 같은 사건번호 역할을 함.
-    # 따라서 case_id 값을 case_number로 저장함.
+    # 6. 세션 메시지 자동 저장
+    if session is not None:
+        user_msg = models.ChatMessage(
+            session_id=session.session_id,
+            role="user",
+            content=request.query,
+        )
+        assistant_msg = models.ChatMessage(
+            session_id=session.session_id,
+            role="assistant",
+            content=answer,
+        )
+        db.add_all([user_msg, assistant_msg])
+        session.updated_at = datetime.datetime.utcnow()
+
+    # 7. 유사 판례 저장
     for idx, case in enumerate(result.get("reference_cases", []), start=1):
         used_case = models.UsedCaseMapping(
             log_id=new_log.log_id,
@@ -94,13 +148,10 @@ def simulate_legal_case(
         )
         db.add(used_case)
 
-    # 5. 관련 법령 근거 저장
-    # 현재는 laws.law_id FK를 쓰지 않음.
-    # ChromaDB_law 검색 결과를 used_law_mappings에 그대로 저장하는 스냅샷 방식.
+    # 8. 관련 법령 저장
     for idx, law in enumerate(result.get("reference_laws", []), start=1):
         law_name = law.get("law_name")
         article_number = law.get("article_number")
-
         used_law = models.UsedLawMapping(
             log_id=new_log.log_id,
             law_key=f"{law_name}_{article_number}" if law_name and article_number else None,
@@ -112,8 +163,5 @@ def simulate_legal_case(
         )
         db.add(used_law)
 
-    # 6. 판례/법령 근거 저장 반영
     db.commit()
-
-    # 7. 프론트엔드에 응답 반환
     return result

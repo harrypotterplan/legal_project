@@ -118,9 +118,9 @@ def create_chat_message(
 
     new_message = models.ChatMessage(
         session_id=session_id,
-        role=request.role,
+        role="user",  # ← request.role 무시. assistant 메시지는 /legal/simulate에서만 생성
         content=request.content
-    )
+)
 
     session.updated_at = datetime.datetime.utcnow()
 

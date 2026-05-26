@@ -3,7 +3,7 @@ import html
 from datetime import datetime
 from typing import Literal, List, Optional, Any
 
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, Field, EmailStr, field_validator, model_validator
 
 
 # =========================================================
@@ -37,6 +37,7 @@ class UserCreate(BaseModel):
 # =========================================================
 class LogResponse(BaseModel):
     log_id: int
+    session_id: Optional[int] = None #대화창 번호
     category: Optional[str] = None  # 신규 추가: 임대차/근로/소비자 구분
     user_query: str
     ai_response: Optional[str] = None
@@ -113,6 +114,7 @@ class UsedLawResponse(BaseModel):
 # =========================================================
 class LogDetailResponse(BaseModel):
     log_id: int
+    session_id: Optional[int] = None
     category: Optional[str] = None
     user_query: str
     ai_response: Optional[str] = None
@@ -265,23 +267,31 @@ class ChatMessageResponse(BaseModel):
 # - 세션형 대화는 /chat/sessions API로 분리
 # - 따라서 여기에는 session_id를 넣지 않음
 # =========================================================
-class SimulationRequest(BaseModel):
-    # 카테고리 검증: 이 3개 외 값이면 422 에러
-    category: Literal["임대차", "근로", "소비자"]
 
-    # 사용자 질문 길이 검증
+class SimulationRequest(BaseModel):
+    # ★ 변경: 옵셔널 (session_id 있으면 세션의 category 자동 사용)
+    category: Optional[Literal["임대차", "근로", "소비자"]] = None
+    
     query: str = Field(
         ...,
         min_length=10,
         max_length=1000,
         description="피해 상황을 10자 이상 1000자 이내로 입력해."
     )
+    
+    session_id: Optional[int] = None
 
-    # XSS 방어: <script> 같은 태그를 안전한 문자로 변환
     @field_validator("query")
     @classmethod
     def sanitize_query(cls, v: str):
         return html.escape(v)
+    
+    # ★ 추가: session_id 없으면 category 필수
+    @model_validator(mode='after')
+    def check_category_or_session(self):
+        if self.session_id is None and self.category is None:
+            raise ValueError("session_id 또는 category 중 하나는 필수입니다.")
+        return self
 
 
 # =========================================================
