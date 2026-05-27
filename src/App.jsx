@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'; 
 import { useTranslation } from 'react-i18next'; 
@@ -36,7 +36,7 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // ✨ 1번 추가: AI 서버에서 받아온 결과를 담을 '빈 상자' 만들기
+  // AI 서버에서 받아온 결과를 담을 '빈 상자'
   const [aiResult, setAiResult] = useState(null);
 
   const triggerLowScore = () => {
@@ -103,18 +103,13 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
       </div>
 
       <Routes>
-        {/* 기본 주소(/)일 때는 원래 챗봇과 대시보드를 보여줌 */}
         <Route path="/" element={
           <MainContent>
-            {/* ✨ 2번 추가: ChatSection이 AI 결과를 빈 상자에 담을 수 있도록 함수(setAiResult)를 넘겨줌 */}
             <ChatSection setAiResult={setAiResult} />
-            
-            {/* ✨ 3번 추가: 상자에 담긴 결과물(aiResult)을 DashboardSection이 가져가서 화면에 그리도록 넘겨줌 */}
             <DashboardSection resultData={aiResult} />
           </MainContent>
         } />
         
-        {/* /mypage 주소일 때는 새로 만든 마이페이지를 보여줌 */}
         <Route path="/mypage" element={<MyPage />} />
       </Routes>
 
@@ -127,7 +122,10 @@ const AppContent = ({ isLoggedIn, setIsLoggedIn }) => {
 
 // ==================== 최상단 App Component ====================
 const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // ✨ 핵심 수정 부분: 처음 앱이 렌더링될 때 무조건 false가 아니라, 로컬 스토리지에 토큰이 있는지 확인합니다.
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return !!localStorage.getItem('access_token');
+  });
 
   return (
     <Router>

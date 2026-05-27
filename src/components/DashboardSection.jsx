@@ -1,7 +1,7 @@
 // src/components/DashboardSection.jsx
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { ChevronDown, ChevronUp, Info } from 'lucide-react'; 
+import { Info, X } from 'lucide-react'; 
 import { useTranslation } from 'react-i18next';
 import juriAvatar from '../assets/jurisimcharH.png'; 
 
@@ -52,7 +52,7 @@ const JuriAvatar = styled.img`
   flex-shrink: 0;
 `;
 
-const AccordionList = styled.div`
+const CaseList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -60,36 +60,18 @@ const AccordionList = styled.div`
   padding-right: 4px;
 `;
 
-const AccordionItem = styled.div`
-  background: #f8f9fa;
+const CaseItem = styled.div`
+  padding: 16px;
+  background: #f8fafc;
   border-radius: 12px;
-  border: 1px solid ${(props) => (props.$isOpen ? '#2c3e50' : '#f0f0f0')};
-  overflow: hidden;
-  transition: border-color 0.2s ease;
-`;
-
-const AccordionHeader = styled.div`
-  padding: 16px 18px;
-  font-weight: 600;
+  border: 1px solid #e2e8f0;
   cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  &:hover {
-    background: #f1f3f5;
-  }
-`;
+  transition: all 0.2s;
 
-const AccordionContent = styled.div`
-  max-height: ${(props) => (props.$isOpen ? '200px' : '0')};
-  padding: ${(props) => (props.$isOpen ? '0 18px 18px 18px' : '0 18px')};
-  opacity: ${(props) => (props.$isOpen ? '1' : '0')};
-  overflow: hidden;
-  transition: all 0.3s ease-in-out;
-  color: #555;
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-line;
+  &:hover {
+    border-color: #94a3b8;
+    background: #f1f5f9;
+  }
 `;
 
 const EmptyState = styled.div`
@@ -103,15 +85,115 @@ const EmptyState = styled.div`
   gap: 12px;
 `;
 
+// 모달(팝업)용 스타일 컴포넌트
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const ModalContent = styled.div`
+  background: #fff;
+  width: 90%;
+  max-width: 650px;
+  max-height: 85vh;
+  border-radius: 16px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 16px;
+`;
+
+const ModalTag = styled.span`
+  background: #f0f4f8;
+  color: #2c3e50;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 8px;
+  margin-right: 8px;
+  display: inline-block;
+`;
+
+const ModalBody = styled.div`
+  overflow-y: auto;
+  padding-right: 12px;
+  
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+`;
+
+// ✨ [신규] 법령 표시를 위한 디자인 컴포넌트
+const LawSection = styled.div`
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 2px dashed #cbd5e1; /* 판례와 법령을 구분하는 점선 */
+`;
+
+const LawTitle = styled.h4`
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+`;
+
+const LawItem = styled.div`
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #2c3e50; /* 법령 느낌을 주는 좌측 포인트 컬러 */
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+`;
+
+// ==================== Helper Function ====================
+const formatLegalText = (text) => {
+  if (!text) return "상세 원문 데이터가 제공되지 않았습니다.";
+  const spacedText = text.replace(/([다함음됨]\.)\s+/g, '$1\n\n');
+  const paragraphs = spacedText.split('\n');
+
+  return paragraphs.map((para, index) => {
+    if (!para.trim()) return null;
+    return (
+      <div
+        key={index}
+        style={{
+          marginBottom: '16px',         
+          fontSize: '15px',             
+          lineHeight: '1.8',            
+          color: '#334155',             
+          textAlign: 'justify',         
+          wordBreak: 'keep-all',        
+        }}
+      >
+        {para}
+      </div>
+    );
+  });
+};
+
 // ==================== Main Component ====================
 const DashboardSection = ({ resultData }) => {
   const { t } = useTranslation();
   const [gaugeProgress, setGaugeProgress] = useState(0);
-  const [openCaseId, setOpenCaseId] = useState(null); 
-
-  const toggleAccordion = (index) => {
-    setOpenCaseId(openCaseId === index ? null : index);
-  };
+  const [selectedCase, setSelectedCase] = useState(null);
 
   useEffect(() => {
     if (resultData) {
@@ -132,7 +214,6 @@ const DashboardSection = ({ resultData }) => {
 
   return (
     <RightSection>
-      {/* 1. 신뢰도 게이지 카드 */}
       <GaugeCard>
         <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 700, color: '#1a2533' }}>
           {t('dash_reliability_title') || '신뢰도 분석 결과'}
@@ -177,42 +258,84 @@ const DashboardSection = ({ resultData }) => {
         </ChartCharacterWrapper>
       </GaugeCard>
 
-      {/* 2. 유사 판례 검색 결과 카드 */}
       <CasesCard>
         <h3 style={{ margin: '0 0 22px 0', fontSize: '18px', fontWeight: 700, color: '#1a2533' }}>
           {t('dash_cases_title') || '유사 판례 검색 결과'}
         </h3>
         
-        <AccordionList>
+        <CaseList>
           {resultData && resultData.reference_cases && resultData.reference_cases.length > 0 ? (
-            resultData.reference_cases.map((caseItem, index) => {
-              const isOpen = openCaseId === index;
-              return (
-                <AccordionItem key={index} $isOpen={isOpen}>
-                  <AccordionHeader onClick={() => toggleAccordion(index)}>
-                    <div style={{ display: 'flex', alignItems: 'center', maxWidth: '85%' }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {caseItem}
-                      </span>
-                    </div>
-                    <div>
-                      {isOpen ? <ChevronUp size={18} color="#2c3e50" /> : <ChevronDown size={18} color="#999" />}
-                    </div>
-                  </AccordionHeader>
-                  <AccordionContent $isOpen={isOpen}>
-                    해당 판례는 좌측 챗봇 주리(Juri)가 분석한 상황과 유사한 법리적 쟁점을 다루고 있습니다. 대법원 종합법률정보 사이트에서 사건 번호를 검색하시면 원문을 확인하실 수 있습니다.
-                  </AccordionContent>
-                </AccordionItem>
-              );
-            })
+            resultData.reference_cases.map((caseItem, index) => (
+              <CaseItem 
+                key={index} 
+                onClick={() => setSelectedCase(caseItem)}
+              >
+                <div style={{ fontWeight: '700', color: '#1e293b', marginBottom: '4px' }}>
+                  {caseItem.case_name || caseItem}
+                </div>
+                <div style={{ fontSize: '13px', color: '#64748b' }}>
+                  관련 법률: {caseItem.category || '해당 없음'} | {caseItem.court || ''}
+                </div>
+              </CaseItem>
+            ))
           ) : (
             <EmptyState>
               <Info size={40} color="#cbd5e1" />
               <p>채팅창에 고민을 입력하시면<br/>분석에 사용된 유사 판례가 표시됩니다.</p>
             </EmptyState>
           )}
-        </AccordionList>
+        </CaseList>
       </CasesCard>
+
+      {/* 모달(팝업) 영역 */}
+      {selectedCase && (
+        <ModalOverlay onClick={() => setSelectedCase(null)}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <div>
+                <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', color: '#1a2533', lineHeight: '1.4' }}>
+                  {selectedCase.case_name || selectedCase}
+                </h2>
+                <ModalTag>관련 분야: {selectedCase.category || '정보 없음'}</ModalTag>
+                {selectedCase.court && (
+                  <ModalTag style={{ background: '#fce8e6', color: '#ea4335' }}>
+                    {selectedCase.court}
+                  </ModalTag>
+                )}
+              </div>
+              <button 
+                onClick={() => setSelectedCase(null)} 
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}
+              >
+                <X size={24} />
+              </button>
+            </ModalHeader>
+            <ModalBody>
+              
+              {/* 1. 기존 판례 원문 출력 */}
+              {formatLegalText(selectedCase.text)}
+
+              {/* ✨ 2. [신규] 관련 법령 리스트 출력 */}
+              {resultData.reference_laws && resultData.reference_laws.length > 0 && (
+                <LawSection>
+                  <LawTitle>⚖️ 사건 관련 주요 법령</LawTitle>
+                  {resultData.reference_laws.map((law, idx) => (
+                    <LawItem key={idx}>
+                      <div style={{ fontWeight: '700', color: '#1e293b', marginBottom: '8px', fontSize: '15px' }}>
+                        {law.law_name} {law.article_number}
+                      </div>
+                      <div style={{ color: '#475569', fontSize: '14px', lineHeight: '1.7', whiteSpace: 'pre-wrap', textAlign: 'justify', wordBreak: 'keep-all' }}>
+                        {law.text || "법령 상세 내용이 제공되지 않았습니다."}
+                      </div>
+                    </LawItem>
+                  ))}
+                </LawSection>
+              )}
+
+            </ModalBody>
+          </ModalContent>
+        </ModalOverlay>
+      )}
     </RightSection>
   );
 };

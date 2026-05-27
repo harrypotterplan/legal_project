@@ -2,13 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useTranslation } from 'react-i18next';
-// ✨ 6주차 탭/기능 아이콘 추가 (Star, BarChart2, Settings, Shield, Trash2)
-import { Clock, ChevronRight, User, Edit2, Key, Star, BarChart2, Settings, Shield, Trash2 } from 'lucide-react';
-// ✨ 백엔드와 통신하기 위해 api를 불러옵니다 (경로 확인 필수!)
+import { Clock, ChevronRight, User, Edit2, Key, Star, BarChart2, Settings, Shield, Trash2, X } from 'lucide-react';
 import { api } from '../api'; 
 
 // ==================== Styled Components ====================
-// (원우님의 Styled Components 원본 100% 유지)
 const Container = styled.div`
   max-width: 800px;
   margin: 0 auto;
@@ -64,7 +61,6 @@ const EditButton = styled.button`
   }
 `;
 
-// ✨ 원우님의 HistorySection을 탭 콘텐츠들을 담는 공통 박스로 활용합니다!
 const HistorySection = styled.div`
   background: white;
   border-radius: 20px;
@@ -82,10 +78,34 @@ const HistoryTitle = styled.h3`
   gap: 10px;
 `;
 
+// 🚨 [수정됨] 내부 스크롤바(드래그 바) 설정
 const HistoryList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
+  
+  /* ✨ 박스 높이를 고정하고 넘치면 스크롤바 무조건 생성 */
+  max-height: 380px; 
+  overflow-y: auto;
+  
+  padding-right: 12px; /* 스크롤바와 아이템이 안 겹치게 여백 */
+  padding-bottom: 4px;
+
+  /* 🎨 예쁜 내부 드래그 바 디자인 */
+  &::-webkit-scrollbar { 
+    width: 8px; 
+  }
+  &::-webkit-scrollbar-track { 
+    background: #f8fafc; 
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb { 
+    background: #cbd5e1; 
+    border-radius: 4px; 
+  }
+  &::-webkit-scrollbar-thumb:hover { 
+    background: #94a3b8; 
+  }
 `;
 
 const HistoryItem = styled.div`
@@ -97,6 +117,9 @@ const HistoryItem = styled.div`
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.2s;
+  
+  /* 🚨 [핵심 해결책] 스크롤 시 아이템이 찌그러지며 잘리는 현상 완벽 방지! */
+  flex-shrink: 0; 
 
   &:hover {
     background: #f9fafb;
@@ -104,7 +127,6 @@ const HistoryItem = styled.div`
   }
 `;
 
-// ✨ 6주차: 탭 메뉴 스타일 추가
 const TabContainer = styled.div`
   display: flex;
   gap: 12px;
@@ -132,7 +154,6 @@ const TabButton = styled.button`
   }
 `;
 
-// ✨ 6주차: 통계 위젯 및 설정 버튼 스타일 추가
 const StatsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -183,10 +204,32 @@ const ModalOverlay = styled.div`
 
 const ModalBox = styled.div`
   background: #ffffff;
-  width: 420px;
+  width: ${props => props.$large ? '700px' : '420px'};
+  max-width: 90%;
+  max-height: 85vh;
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 16px;
+`;
+
+const ModalBodyScroll = styled.div`
+  overflow-y: auto;
+  padding-right: 12px;
+  flex: 1;
+
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 `;
 
 const InputGroup = styled.div`
@@ -259,11 +302,29 @@ const ActionButton = styled.button`
   }
 `;
 
+const DetailLabel = styled.span`
+  background: #e2e8f0;
+  color: #475569;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 8px;
+`;
+
+const ItemBox = styled.div`
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #3b82f6;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+`;
+
 // ==================== Main Component ====================
 const MyPage = () => {
   const { t } = useTranslation();
 
-  // 사용자 정보 및 모달 상태
   const [profile, setProfile] = useState({ name: "...", email: "..." });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isChangingPw, setIsChangingPw] = useState(false);
@@ -272,27 +333,23 @@ const MyPage = () => {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
-  // ✨ 6주차: 활성화된 탭 상태 관리 추가
   const [activeTab, setActiveTab] = useState('history');
-
-  // ✨ 실제 DB에서 가져올 기록 데이터 상태 추가
   const [historyLogs, setHistoryLogs] = useState([]);
+  
+  const [selectedDetail, setSelectedDetail] = useState(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
 
-  // ✨ 컴포넌트 마운트 시 실제 유저 정보 및 기록 가져오기
   useEffect(() => {
     const fetchMyPageData = async () => {
       try {
-        // 1. 유저 프로필 조회 (백엔드 스키마: username)
         const userRes = await api.get('/users/me');
         setProfile({
           name: userRes.data.username || "사용자",
           email: userRes.data.email
         });
 
-        // 2. 검색 기록 리스트 조회 
-        // (api.js의 baseURL이 '/api/v1'이므로 뒤에 '/history/logs'만 붙임)
         const historyRes = await api.get('/history/logs');
-        setHistoryLogs(historyRes.data);
+        setHistoryLogs(historyRes.data.items || historyRes.data);
 
       } catch (error) {
         console.error("데이터 통신에 실패했습니다.", error);
@@ -301,7 +358,6 @@ const MyPage = () => {
     fetchMyPageData();
   }, []);
 
-  // 이메일 마스킹 함수
   const maskEmail = (email) => {
     if (!email || email === "...") return email;
     const [id, domain] = email.split('@');
@@ -318,10 +374,8 @@ const MyPage = () => {
     setIsEditModalOpen(true);
   };
 
-  // 🚨 [핵심 수정 로직] 백엔드 UserUpdate 스키마에 맞춰 단일 페이로드 구성
   const handleSaveProfile = async () => {
     try {
-      // 1. 프론트엔드 자체 검증 (백엔드의 min_length=2, max_length=10 규격 맞춤)
       if (editName.length < 2 || editName.length > 10) {
         alert("이름은 2~10자 사이여야 합니다.");
         return;
@@ -334,37 +388,29 @@ const MyPage = () => {
         }
       }
 
-      // 2. 백엔드 schemas.py의 UserUpdate 구조와 100% 동일한 Payload 객체 생성
-      const payload = {
-        username: editName
-      };
+      const payload = { username: editName };
 
-      // 비밀번호 변경 모드일 때만 필드 추가 (old_password가 아닌 current_password 사용)
       if (isChangingPw) {
         payload.current_password = currentPassword;
         payload.new_password = newPassword;
       }
 
-      // 3. 단일 PUT 요청으로 전송 (기존의 두 번 쪼개 보내던 로직 삭제)
       await api.put('/users/me', payload);
 
       setProfile({ ...profile, name: editName });
       alert(t('save_success') || "성공적으로 저장되었습니다.");
       
-      // 저장 성공 시 모달 닫기 및 상태 초기화
       setIsEditModalOpen(false);
       setIsChangingPw(false);
       setCurrentPassword("");
       setNewPassword("");
 
     } catch (error) {
-      // FastAPI의 RequestValidationError (422) 및 HTTPException 처리
       const errorMessage = error.response?.data?.message || error.response?.data?.detail || "수정에 실패했습니다.";
       alert(`[오류] ${errorMessage}`);
     }
   };
 
-  // ✨ 6주차 기능 함수 추가
   const handleDeleteAccount = () => {
     if (window.confirm(t('confirm_delete') || "정말 탈퇴하시겠습니까? 모든 상담 기록과 스크랩이 영구 삭제됩니다.")) {
       alert(t('alert_delete_success') || "탈퇴 처리가 완료되었습니다.");
@@ -375,16 +421,38 @@ const MyPage = () => {
     alert(t('alert_disclaimer') || "⚖️ 법률 서비스 면책 조항\n\n본 Juri-Sim 서비스가 제공하는 시뮬레이션 결과 및 유사 판례 정보는 법적 효력을 갖지 않으며, 단순 참고용입니다.");
   };
 
-  // ✨ 백엔드의 datetime 문자열을 깔끔하게 보여주기 위한 함수
   const formatDate = (dateString) => {
     if (!dateString) return "";
     const date = new Date(dateString);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
+  const handleOpenDetail = async (logId) => {
+    setIsDetailLoading(true);
+    try {
+      const response = await api.get(`/history/logs/${logId}`);
+      setSelectedDetail(response.data);
+    } catch (error) {
+      alert("상세 기록을 불러오는데 실패했습니다.");
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
+
+  const handleDeleteLog = async (e, logId) => {
+    e.stopPropagation(); 
+    if (window.confirm("이 상담 기록을 삭제하시겠습니까?")) {
+      try {
+        await api.delete(`/history/logs/${logId}`);
+        setHistoryLogs((prev) => prev.filter(log => log.log_id !== logId));
+      } catch (error) {
+        alert("기록 삭제에 실패했습니다.");
+      }
+    }
+  };
+
   return (
     <Container>
-      {/* 👤 프로필 영역 (원본 유지) */}
       <ProfileCard>
         <UserInfoArea>
           <AvatarCircle><User size={40} /></AvatarCircle>
@@ -400,7 +468,6 @@ const MyPage = () => {
         </EditButton>
       </ProfileCard>
 
-      {/* ✨ 6주차: 탭 메뉴 영역 추가 */}
       <TabContainer>
         <TabButton $active={activeTab === 'history'} onClick={() => setActiveTab('history')}>
           <Clock size={18} /> {t('tab_history') || '기록'}
@@ -416,28 +483,26 @@ const MyPage = () => {
         </TabButton>
       </TabContainer>
 
-      {/* 📜 콘텐츠 영역 */}
       <HistorySection>
-        
-        {/* 탭 1: 실제 DB 시뮬레이션 기록 렌더링 */}
         {activeTab === 'history' && (
           <>
             <HistoryTitle>
               <Clock size={22} /> {t('history_title') || '최근 시뮬레이션 기록'}
             </HistoryTitle>
             <HistoryList>
+              {isDetailLoading && <div style={{textAlign: 'center', padding: '20px'}}>상세 데이터를 불러오는 중... ⏳</div>}
               {historyLogs.length > 0 ? (
                 historyLogs.map((item) => (
-                  <HistoryItem key={item.log_id}>
-                    <div>
+                  <HistoryItem key={item.log_id} onClick={() => handleOpenDetail(item.log_id)}>
+                    <div style={{ flex: 1, marginRight: '16px' }}>
                       <div style={{ fontSize: '13px', color: '#9ca3af', marginBottom: '4px' }}>
-                        {formatDate(item.created_at)}
+                        {formatDate(item.created_at)} | {item.category || '분야 없음'}
                       </div>
-                      <div style={{ fontWeight: 600, color: '#1a2533' }}>
-                        {item.user_query.length > 30 ? item.user_query.substring(0, 30) + "..." : item.user_query}
+                      <div style={{ fontWeight: 600, color: '#1a2533', lineHeight: '1.4' }}>
+                        {item.user_query.length > 40 ? item.user_query.substring(0, 40) + "..." : item.user_query}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <span style={{ 
                         fontSize: '14px', 
                         color: item.reliability_score >= 80 ? '#34a853' : '#ea4335', 
@@ -445,6 +510,18 @@ const MyPage = () => {
                       }}>
                         {item.reliability_score ? `${Math.round(item.reliability_score)}%` : '점수 없음'}
                       </span>
+                      
+                      <button 
+                        onClick={(e) => handleDeleteLog(e, item.log_id)}
+                        style={{ 
+                          background: 'none', border: 'none', cursor: 'pointer', 
+                          color: '#ef4444', padding: '4px', display: 'flex' 
+                        }}
+                        title="기록 삭제"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+
                       <ChevronRight size={18} color="#d1d5db" />
                     </div>
                   </HistoryItem>
@@ -458,7 +535,6 @@ const MyPage = () => {
           </>
         )}
 
-        {/* 탭 2: 스크랩북 (아직 백엔드 API가 없으므로 원본 유지) */}
         {activeTab === 'scrap' && (
           <>
             <HistoryTitle>
@@ -466,17 +542,14 @@ const MyPage = () => {
             </HistoryTitle>
             <HistoryList>
               <HistoryItem>
-                <div>
-                  <div style={{ fontSize: '13px', color: '#9ca3af', marginBottom: '4px' }}>대법원 2021. 12. 30. 선고</div>
-                  <div style={{ fontWeight: 600, color: '#1a2533' }}>계약 해제에 따른 원상회복 의무 관련 판례</div>
+                <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', width: '100%' }}>
+                  아직 스크랩한 판례가 없습니다.
                 </div>
-                <ChevronRight size={18} color="#d1d5db" />
               </HistoryItem>
             </HistoryList>
           </>
         )}
 
-        {/* 탭 3: 통계 (실제 배열 데이터를 기반으로 계산) */}
         {activeTab === 'stats' && (
           <>
             <HistoryTitle>
@@ -491,15 +564,14 @@ const MyPage = () => {
                 <h4>평균 신뢰도</h4>
                 <p style={{ fontSize: '18px', marginTop: '6px' }}>
                    {historyLogs.length > 0 
-                    ? Math.round(historyLogs.reduce((acc, curr) => acc + (curr.reliability_score || 0), 0) / historyLogs.length) + "%" 
-                    : "0%"}
+                   ? Math.round(historyLogs.reduce((acc, curr) => acc + (curr.reliability_score || 0), 0) / historyLogs.length) + "%" 
+                   : "0%"}
                 </p>
               </StatBox>
             </StatsGrid>
           </>
         )}
 
-        {/* 탭 4: 설정 (원본 유지) */}
         {activeTab === 'settings' && (
           <>
             <HistoryTitle>
@@ -515,35 +587,25 @@ const MyPage = () => {
             </SettingButton>
           </>
         )}
-
       </HistorySection>
 
-      {/* 🛠️ 프로필 수정 모달창 (원본 모달 코드 100% 유지) */}
+      {/* 모달창들 (프로필 수정 & 상세 보기) */}
       {isEditModalOpen && (
-        <ModalOverlay>
-          <ModalBox>
+        <ModalOverlay onClick={() => setIsEditModalOpen(false)}>
+          <ModalBox onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginTop: 0, marginBottom: '24px', fontSize: '20px', color: '#1a2533' }}>
               {t('edit_modal_title') || '프로필 수정'}
             </h2>
-            
             <InputGroup>
               <Label>{t('edit_name_label') || '이름'}</Label>
-              <Input 
-                type="text" 
-                value={editName} 
-                onChange={(e) => setEditName(e.target.value)} 
-              />
+              <Input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} />
             </InputGroup>
-
             <InputGroup>
               <Label>이메일</Label>
               <Input type="text" value={profile.email} disabled />
             </InputGroup>
-
             <hr style={{ border: 'none', borderTop: '1px solid #f0f0f0', margin: '24px 0' }} />
-
             <Label><Key size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }}/> 비밀번호</Label>
-            
             {!isChangingPw ? (
               <PwDisplayArea>
                 <span style={{ letterSpacing: '2px', color: '#6b7280' }}>{t('dummy_password') || '********'}</span>
@@ -555,33 +617,19 @@ const MyPage = () => {
               <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                 <div style={{ marginBottom: '12px' }}>
                   <Label style={{ fontSize: '13px' }}>{t('current_pw_label') || '현재 비밀번호'}</Label>
-                  <Input 
-                    type="password" 
-                    value={currentPassword} 
-                    onChange={(e) => setCurrentPassword(e.target.value)} 
-                    style={{ padding: '8px', fontSize: '14px' }} 
-                  />
+                  <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ padding: '8px', fontSize: '14px' }} />
                 </div>
                 <div>
                   <Label style={{ fontSize: '13px' }}>{t('new_pw_label') || '새 비밀번호'}</Label>
-                  <Input 
-                    type="password" 
-                    value={newPassword} 
-                    onChange={(e) => setNewPassword(e.target.value)} 
-                    style={{ padding: '8px', fontSize: '14px' }} 
-                  />
+                  <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ padding: '8px', fontSize: '14px' }} />
                 </div>
                 <div style={{ textAlign: 'right', marginTop: '12px' }}>
-                  <span 
-                    onClick={() => { setIsChangingPw(false); setCurrentPassword(""); setNewPassword(""); }}
-                    style={{ fontSize: '13px', color: '#6b7280', cursor: 'pointer', textDecoration: 'underline' }}
-                  >
+                  <span onClick={() => { setIsChangingPw(false); setCurrentPassword(""); setNewPassword(""); }} style={{ fontSize: '13px', color: '#6b7280', cursor: 'pointer', textDecoration: 'underline' }}>
                     {t('cancel_pw_change') || '변경 취소'}
                   </span>
                 </div>
               </div>
             )}
-
             <ModalButtonGroup>
               <ActionButton onClick={() => setIsEditModalOpen(false)}>
                 {t('cancel_btn') || '취소'}
@@ -590,11 +638,74 @@ const MyPage = () => {
                 {t('save_btn') || '저장하기'}
               </ActionButton>
             </ModalButtonGroup>
-
           </ModalBox>
         </ModalOverlay>
       )}
 
+      {selectedDetail && (
+        <ModalOverlay onClick={() => setSelectedDetail(null)}>
+          <ModalBox $large onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <div>
+                <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', color: '#1a2533', lineHeight: '1.4' }}>
+                  상담 내역 상세 보기
+                </h2>
+                <div style={{ fontSize: '14px', color: '#64748b' }}>
+                  {formatDate(selectedDetail.created_at)} | 분야: {selectedDetail.category} | 신뢰도: {selectedDetail.reliability_score}%
+                </div>
+              </div>
+              <button onClick={() => setSelectedDetail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
+                <X size={24} />
+              </button>
+            </ModalHeader>
+            <ModalBodyScroll>
+              <div style={{ marginBottom: '24px' }}>
+                <DetailLabel>나의 질문</DetailLabel>
+                <div style={{ marginTop: '8px', padding: '16px', background: '#f1f5f9', borderRadius: '8px', fontSize: '15px', color: '#334155' }}>
+                  {selectedDetail.user_query}
+                </div>
+              </div>
+              <div style={{ marginBottom: '24px' }}>
+                <DetailLabel>AI 요약 답변</DetailLabel>
+                <div style={{ marginTop: '8px', padding: '16px', background: '#fdfce8', border: '1px solid #fef08a', borderRadius: '8px', fontSize: '15px', color: '#422006', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                  {selectedDetail.summary || selectedDetail.ai_response}
+                </div>
+              </div>
+              {selectedDetail.used_cases && selectedDetail.used_cases.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <DetailLabel style={{ background: '#e0e7ff', color: '#4338ca' }}>관련 판례</DetailLabel>
+                  <div style={{ marginTop: '12px' }}>
+                    {selectedDetail.used_cases.map((caseItem, idx) => (
+                      <ItemBox key={idx} style={{ borderLeftColor: '#6366f1' }}>
+                        <div style={{ fontWeight: '700', color: '#1e293b', marginBottom: '4px', fontSize: '15px' }}>
+                          {caseItem.case_name || caseItem.case_number}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>
+                          {caseItem.court_name} | {caseItem.judgment_date}
+                        </div>
+                      </ItemBox>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {selectedDetail.used_laws && selectedDetail.used_laws.length > 0 && (
+                <div>
+                  <DetailLabel style={{ background: '#dcfce7', color: '#15803d' }}>관련 법령</DetailLabel>
+                  <div style={{ marginTop: '12px' }}>
+                    {selectedDetail.used_laws.map((lawItem, idx) => (
+                      <ItemBox key={idx} style={{ borderLeftColor: '#22c55e' }}>
+                        <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '15px' }}>
+                          {lawItem.law_name} {lawItem.article_number}
+                        </div>
+                      </ItemBox>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </ModalBodyScroll>
+          </ModalBox>
+        </ModalOverlay>
+      )}
     </Container>
   );
 };

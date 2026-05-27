@@ -30,4 +30,5 @@ venv/
 __pycache__/
 *.db
 *.pyc
-"backend/chroma_db/" 
+backend/chroma_db/
+backend/chroma_db_law/

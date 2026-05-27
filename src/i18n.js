@@ -42,6 +42,10 @@ const resources = {
       // --- 채팅 섹션 (ChatSection) ---
       chat_placeholder: "법률 고민을 자유롭게 말씀해 주세요...",
       send_btn: "전송",
+      chat_category_label: "상담 분야:",
+      cat_labor: "근로",
+      cat_consumer: "소비자",
+      cat_lease: "임대차",
 
       // --- 마이페이지 (MyPage) 공통 ---
       user_name_label: "사용자 이름",
@@ -126,6 +130,10 @@ const resources = {
       // --- Chat Section ---
       chat_placeholder: "Please feel free to tell us your legal concerns...",
       send_btn: "Send",
+      chat_category_label: "Category:",
+      cat_labor: "Labor",
+      cat_consumer: "Consumer",
+      cat_lease: "Lease",
 
       // --- My Page Common ---
       user_name_label: "Username",
