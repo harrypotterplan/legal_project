@@ -1,0 +1,124 @@
+import chromadb
+import pandas as pd
+import random
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from tqdm import tqdm
+
+# ── seed 고정 ─────────────────────────────────────────────────────────
+SEED = 1
+random.seed(SEED)
+np.random.seed(SEED)
+
+# ── 1. 공통 로드 ──────────────────────────────────────────────────────
+client     = chromadb.PersistentClient(path="./chroma_db")
+collection = client.get_collection("jurisim_cases")
+
+result = collection.get(include=['documents', 'metadatas'])
+df = pd.DataFrame({
+    'chunk_id':   result['ids'],
+    'chunk_text': result['documents'],
+    'case_id':    [m['case_id']  for m in result['metadatas']],
+    'category':   [m['category'] for m in result['metadatas']],
+})
+df = df.dropna(subset=['chunk_text']).reset_index(drop=True)
+print(f"✅ DB에서 {len(df)}개 청크 로드 완료")
+
+model = SentenceTransformer('snunlp/KR-SBERT-V40K-klueNLI-augSTS')
+
+id_to_row      = df.set_index('chunk_id').to_dict('index')
+case_to_chunks = df.groupby('case_id')['chunk_id'].apply(list).to_dict()
+
+# ── 2. v3 설정 ────────────────────────────────────────────────────────
+exp = {"name": "v3_topk100_min010", "min": 0.10, "max": 0.85, "topk": 100}
+
+# ── 3. Triplet 생성 ──────────────────────────────────────────────────
+triplets = []
+skipped  = 0
+
+for case_id, chunks in tqdm(case_to_chunks.items(), desc=f"Mining [{exp['name']}]"):
+    if len(chunks) < 2:
+        continue
+
+    anchor_id       = random.choice(chunks)
+    anchor_row      = id_to_row[anchor_id]
+    anchor_text     = anchor_row['chunk_text']
+    anchor_category = anchor_row['category']
+
+    pos_pool      = [c for c in chunks if c != anchor_id]
+    positive_text = id_to_row[random.choice(pos_pool)]['chunk_text']
+
+    anchor_emb = model.encode([anchor_text]).tolist()
+    results    = collection.query(
+        query_embeddings=anchor_emb,
+        n_results=exp['topk'],
+        include=['documents', 'metadatas', 'distances']
+    )
+
+    hard_neg_text     = None
+    hard_neg_category = None
+
+    # 1순위: 다른 카테고리 + 거리 범위
+    for doc, meta, dist in zip(
+        results['documents'][0],
+        results['metadatas'][0],
+        results['distances'][0]
+    ):
+        if (meta['case_id'] != case_id
+                and meta['category'] != anchor_category
+                and exp['min'] <= dist <= exp['max']):
+            hard_neg_text     = doc
+            hard_neg_category = meta['category']
+            break
+
+    # 2순위: 다른 카테고리 + 거리 조건 완화
+    if hard_neg_text is None:
+        for doc, meta, dist in zip(
+            results['documents'][0],
+            results['metadatas'][0],
+            results['distances'][0]
+        ):
+            if (meta['case_id'] != case_id
+                    and meta['category'] != anchor_category):
+                hard_neg_text     = doc
+                hard_neg_category = meta['category']
+                break
+
+    # 3순위: 같은 카테고리 + 거리 범위
+    if hard_neg_text is None:
+        for doc, meta, dist in zip(
+            results['documents'][0],
+            results['metadatas'][0],
+            results['distances'][0]
+        ):
+            if (meta['case_id'] != case_id
+                    and exp['min'] <= dist <= exp['max']):
+                hard_neg_text     = doc
+                hard_neg_category = meta['category']
+                break
+
+    if hard_neg_text is None:
+        skipped += 1
+        continue
+
+    triplets.append({
+        'anchor':            anchor_text,
+        'positive':          positive_text,
+        'negative':          hard_neg_text,
+        'case_id':           case_id,
+        'anchor_category':   anchor_category,
+        'negative_category': hard_neg_category,
+    })
+
+# ── 4. 저장 & 리포트 ─────────────────────────────────────────────────
+df_out = pd.DataFrame(triplets)
+fname  = f"triplet_{exp['name']}_seed{SEED}.csv"
+df_out.to_csv(fname, index=False, encoding='utf-8-sig')
+
+total      = len(triplets) + skipped
+skip_rate  = skipped / total * 100
+cross_rate = (df_out['anchor_category'] != df_out['negative_category']).mean() * 100
+
+print(f"\n✅ {fname} 저장 완료")
+print(f"   triplet: {len(triplets)}개 | 스킵: {skipped}개 ({skip_rate:.1f}%)")
+print(f"   cross-category 비율: {cross_rate:.1f}%")
