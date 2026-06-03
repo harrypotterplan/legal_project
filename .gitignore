@@ -1,0 +1,11 @@
+.env
+*.pem
+*.db
+chroma_db/
+chroma_db_law/
+jurisim-sbert-v4/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+backend/jurisim-sbert-v4/
